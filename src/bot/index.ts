@@ -247,49 +247,52 @@ export function createBot(config: BotConfig) {
     const data = (ctx.callbackQuery as any).data;
     if (!data) return;
     
-    // Handle ask_user responses
-    if (data.startsWith('ask:')) {
-      const [, id, indexStr] = data.split(':');
-      const pending = pendingQuestions.get(id);
-      
-      if (pending) {
-        // Get the selected option text from the keyboard
-        const keyboard = (ctx.callbackQuery.message as any)?.reply_markup?.inline_keyboard;
-        const optionIndex = parseInt(indexStr);
-        const selectedText = keyboard?.[optionIndex]?.[0]?.text || `Option ${optionIndex + 1}`;
+    try {
+      // Handle ask_user responses
+      if (data.startsWith('ask:')) {
+        const [, id, indexStr] = data.split(':');
+        const pending = pendingQuestions.get(id);
         
-        pending.resolve(selectedText);
+        if (pending) {
+          const keyboard = (ctx.callbackQuery.message as any)?.reply_markup?.inline_keyboard;
+          const optionIndex = parseInt(indexStr);
+          const selectedText = keyboard?.[optionIndex]?.[0]?.text || `Option ${optionIndex + 1}`;
+          
+          pending.resolve(selectedText);
+          
+          try {
+            await ctx.editMessageText(`✅ Selected: <b>${escapeHtml(selectedText)}</b>`, { parse_mode: 'HTML' });
+          } catch {}
+          
+          await ctx.answerCbQuery(`Selected: ${selectedText}`).catch(() => {});
+        } else {
+          await ctx.answerCbQuery('This question has expired').catch(() => {});
+        }
+        return;
+      }
+      
+      // Handle approval/deny
+      const [action, id] = data.split(':');
+      if (!id || (action !== 'approve' && action !== 'deny')) return;
+      
+      const approved = action === 'approve';
+      const handled = handleApproval(id, approved);
+      
+      if (handled) {
+        const statusText = approved 
+          ? '✅ <b>Command Approved</b>' 
+          : '❌ <b>Command Denied</b>';
         
         try {
-          await ctx.editMessageText(`✅ Selected: <b>${escapeHtml(selectedText)}</b>`, { parse_mode: 'HTML' });
+          await ctx.editMessageText(statusText, { parse_mode: 'HTML' });
         } catch {}
         
-        await ctx.answerCbQuery(`Selected: ${selectedText}`);
+        await ctx.answerCbQuery(approved ? 'Command approved' : 'Command denied').catch(() => {});
       } else {
-        await ctx.answerCbQuery('This question has expired');
+        await ctx.answerCbQuery('This approval has expired or was already handled').catch(() => {});
       }
-      return;
-    }
-    
-    // Handle approval/deny
-    const [action, id] = data.split(':');
-    if (!id || (action !== 'approve' && action !== 'deny')) return;
-    
-    const approved = action === 'approve';
-    const handled = handleApproval(id, approved);
-    
-    if (handled) {
-      const statusText = approved 
-        ? '✅ <b>Command Approved</b>' 
-        : '❌ <b>Command Denied</b>';
-      
-      try {
-        await ctx.editMessageText(statusText, { parse_mode: 'HTML' });
-      } catch {}
-      
-      await ctx.answerCbQuery(approved ? 'Command approved' : 'Command denied');
-    } else {
-      await ctx.answerCbQuery('This approval has expired or was already handled');
+    } catch (e) {
+      console.error('[callback] Error handling callback query:', e);
     }
   });
   
