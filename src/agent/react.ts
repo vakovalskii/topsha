@@ -42,7 +42,7 @@ export class ReActAgent {
   
   constructor(config: AgentConfig) {
     this.config = {
-      maxIterations: 30,
+      maxIterations: 15,  // Reduced from 30 to prevent long loops
       maxHistory: 10,  // keep last 10 conversations
       exposedPorts: [],
       ...config,
@@ -145,6 +145,8 @@ ${memoryContent}
     let workingMessages: OpenAI.ChatCompletionMessageParam[] = [];
     let iteration = 0;
     let finalResponse = '';
+    let blockedCount = 0;  // Track consecutive BLOCKED errors
+    const MAX_BLOCKED = 3;  // Stop after 3 BLOCKED commands
     
     // ReAct loop: Think → Act → Observe
     while (iteration < this.config.maxIterations!) {
@@ -224,6 +226,7 @@ ${memoryContent}
         workingMessages.push(message);
         
         // Act: Execute tools
+        let hasBlocked = false;
         for (const call of message.tool_calls) {
           const name = call.function.name;
           const args = JSON.parse(call.function.arguments || '{}');
@@ -241,9 +244,17 @@ ${memoryContent}
             tavilyApiKey: this.config.tavilyApiKey,
           });
           
-          const output = result.success 
+          let output = result.success 
             ? (result.output || 'Success') 
             : `Error: ${result.error}`;
+          
+          // Track BLOCKED commands to prevent loops
+          if (output.includes('BLOCKED:')) {
+            hasBlocked = true;
+            blockedCount++;
+            output += '\n\n⛔ THIS COMMAND IS PERMANENTLY BLOCKED. Do NOT retry it. Find an alternative approach or inform the user this action is not allowed.';
+            console.log(`[SECURITY] BLOCKED count: ${blockedCount}/${MAX_BLOCKED}`);
+          }
           
           console.log(`[RESULT] ${output.slice(0, 500)}${output.length > 500 ? '...' : ''}`);
           
@@ -252,6 +263,18 @@ ${memoryContent}
             tool_call_id: call.id,
             content: output,
           });
+        }
+        
+        // Stop if too many BLOCKED commands (prevent loops)
+        if (blockedCount >= MAX_BLOCKED) {
+          console.log(`[SECURITY] Too many BLOCKED commands (${blockedCount}), stopping agent`);
+          finalResponse = '🚫 Stopped: Multiple blocked commands detected. The requested actions are not allowed for security reasons.';
+          break;
+        }
+        
+        // Reset blocked count if no blocked commands this iteration
+        if (!hasBlocked) {
+          blockedCount = 0;
         }
         
       } catch (e: any) {
