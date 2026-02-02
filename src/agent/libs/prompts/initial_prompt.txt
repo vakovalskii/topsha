@@ -1,0 +1,8 @@
+Current Date: {current_date} (Year-Month-Day ISO format: YYYY-MM-DD HH:MM:SS)
+
+{memory_section}
+
+ORIGINAL USER REQUEST:
+
+{task}
+

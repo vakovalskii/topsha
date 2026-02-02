@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  agent:
+    build: .
+    container_name: localtopsh-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Mount workspace directory for file operations
+      - ./workspace:/workspace
+      # Persist agent data (memory, logs, etc)
+      - agent-data:/root/.valera
+    environment:
+      - AGENT_CWD=/workspace
+      - NODE_ENV=production
+    # Optional: expose health check port
+    # ports:
+    #   - "3000:3000"
+    networks:
+      - agent-network
+
+  # Optional: Local LLM server (vLLM example)
+  # vllm:
+  #   image: vllm/vllm-openai:latest
+  #   container_name: localtopsh-vllm
+  #   restart: unless-stopped
+  #   runtime: nvidia
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #   volumes:
+  #     - ~/.cache/huggingface:/root/.cache/huggingface
+  #   command: >
+  #     --model Qwen/Qwen2.5-7B-Instruct
+  #     --host 0.0.0.0
+  #     --port 8000
+  #     --max-model-len 32768
+  #   ports:
+  #     - "8000:8000"
+  #   networks:
+  #     - agent-network
+
+volumes:
+  agent-data:
+
+networks:
+  agent-network:
+    driver: bridge

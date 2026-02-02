@@ -1,0 +1,35 @@
+{
+  "name": "localtopsh",
+  "version": "1.0.0",
+  "description": "Autonomous AI Agent Core with Telegram interface - OpenAI SDK compatible",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "telegram": "tsx src/telegram/bot.ts",
+    "telegram:dev": "tsx watch src/telegram/bot.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "fast-glob": "^3.3.3",
+    "mammoth": "^1.11.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.77.0",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.50.0",
+    "quickjs-emscripten": "^0.31.0",
+    "sharp": "^0.33.5",
+    "telegraf": "^4.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pdf-parse": "^1.1.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
