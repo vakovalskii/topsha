@@ -357,7 +357,8 @@ interface ToolTracker {
   messageId?: number;
 }
 const toolTrackers = new Map<number, ToolTracker>();
-const TOOL_UPDATE_INTERVAL = 3; // Update every N tools
+const TOOL_UPDATE_INTERVAL = 5; // Update every N tools
+const MIN_EDIT_INTERVAL_MS = 3000; // Minimum 3 seconds between edits
 
 // Random reactions for messages
 const POSITIVE_REACTIONS = ['❤️', '🔥', '👍', '🎉', '💯', '⭐', '🤩', '👏'];
@@ -885,8 +886,12 @@ export function createBot(config: BotConfig) {
           const comment = getToolComment(toolName);
           tracker.tools.push(`${toolEmoji(toolName)} ${comment}`);
           
-          // Update status every N tools (to avoid spam)
-          if (tracker.tools.length % TOOL_UPDATE_INTERVAL === 1) {
+          const now = Date.now();
+          const timeSinceLastUpdate = now - tracker.lastUpdate;
+          
+          // Update status every N tools AND respect minimum interval (avoid 429)
+          if (tracker.tools.length % TOOL_UPDATE_INTERVAL === 1 && timeSinceLastUpdate >= MIN_EDIT_INTERVAL_MS) {
+            tracker.lastUpdate = now;
             const statusText = `Working...\n\n${tracker.tools.slice(-6).join('\n')}`;
             
             try {
