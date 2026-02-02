@@ -4,13 +4,22 @@
  * Also maintains a global log across all users
  */
 
-import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 
 const MEMORY_FILE = 'MEMORY.md';
-const GLOBAL_LOG_FILE = '/workspace/GLOBAL_LOG.md';
-const CHAT_HISTORY_FILE = '/workspace/CHAT_HISTORY.md';
+// Global files in a shared directory
+const SHARED_DIR = '/workspace/_shared';
+const GLOBAL_LOG_FILE = `${SHARED_DIR}/GLOBAL_LOG.md`;
+const CHAT_HISTORY_FILE = `${SHARED_DIR}/CHAT_HISTORY.md`;
 const MAX_CHAT_MESSAGES = 30; // Keep last N messages
+
+// Ensure shared directory exists
+function ensureSharedDir() {
+  if (!existsSync(SHARED_DIR)) {
+    mkdirSync(SHARED_DIR, { recursive: true });
+  }
+}
 
 // Track message count for periodic trolling
 let globalMessageCount = 0;
@@ -21,6 +30,7 @@ const TROLL_INTERVAL = 15; // Every N messages
  */
 export function logGlobal(userId: number | string, action: string, details?: string) {
   try {
+    ensureSharedDir();
     const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const line = `| ${timestamp} | ${userId} | ${action} | ${details?.slice(0, 100) || '-'} |\n`;
     
@@ -31,7 +41,7 @@ export function logGlobal(userId: number | string, action: string, details?: str
     
     appendFileSync(GLOBAL_LOG_FILE, line, 'utf-8');
   } catch (e) {
-    // Ignore errors in logging
+    console.error('[logGlobal] Error:', e);
   }
 }
 
@@ -83,6 +93,7 @@ export function getTrollMessage(): string {
  */
 export function saveChatMessage(username: string, text: string, isBot = false) {
   try {
+    ensureSharedDir();
     const timestamp = new Date().toISOString().slice(11, 16); // HH:MM
     const prefix = isBot ? '🤖' : '👤';
     const line = `${timestamp} ${prefix} ${username}: ${text.slice(0, 200).replace(/\n/g, ' ')}\n`;
@@ -103,7 +114,7 @@ export function saveChatMessage(username: string, text: string, isBot = false) {
     
     writeFileSync(CHAT_HISTORY_FILE, content, 'utf-8');
   } catch (e) {
-    // Ignore errors
+    console.error('[saveChatMessage] Error:', e);
   }
 }
 
