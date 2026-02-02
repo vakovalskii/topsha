@@ -29,6 +29,7 @@ export interface BotConfig {
   zaiApiKey?: string;
   tavilyApiKey?: string;
   allowedUsers?: number[];
+  allowedGroups?: number[];  // Groups where anyone can use bot
   exposedPorts?: number[];
 }
 
@@ -379,12 +380,21 @@ export function createBot(config: BotConfig) {
     const userId = ctx.from?.id;
     if (!userId) return;
     
+    const chatId = ctx.chat?.id;
+    const chatType = (ctx.message as any)?.chat?.type || ctx.chat?.type;
+    const isGroup = chatType === 'group' || chatType === 'supergroup';
+    
+    // In allowed groups - everyone can use
+    if (isGroup && chatId && config.allowedGroups?.includes(chatId)) {
+      return next();
+    }
+    
+    // Check allowed users
     if (config.allowedUsers?.length && !config.allowedUsers.includes(userId)) {
-      const chatType = (ctx.message as any)?.chat?.type;
       if (chatType === 'private') {
         return ctx.reply('🚫 Access denied');
       }
-      return;
+      return;  // Ignore in non-allowed groups
     }
     
     return next();

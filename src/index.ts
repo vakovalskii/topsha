@@ -23,6 +23,11 @@ const allowedUsers = process.env.ALLOWED_USERS
   ? process.env.ALLOWED_USERS.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
   : [];
 
+// Parse allowed groups from env (comma-separated, negative IDs)
+const allowedGroups = process.env.ALLOWED_GROUPS
+  ? process.env.ALLOWED_GROUPS.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+  : [];
+
 // Parse exposed ports from env (comma-separated)
 const exposedPorts = process.env.EXPOSED_PORTS
   ? process.env.EXPOSED_PORTS.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
@@ -38,6 +43,7 @@ const config = {
   cwd: process.env.AGENT_CWD || process.cwd(),
   gatewayPort: parseInt(process.env.GATEWAY_PORT || '3100'),
   allowedUsers,
+  allowedGroups,
   exposedPorts,
 };
 
@@ -56,7 +62,8 @@ if (mode === 'gateway') {
   console.log(`CWD: ${config.cwd}`);
   console.log(`Model: ${config.model}`);
   console.log(`Search: ${config.zaiApiKey ? 'Z.AI' : config.tavilyApiKey ? 'Tavily' : 'none'}`);
-  console.log(`Allowed: ${allowedUsers.length ? allowedUsers.join(', ') : 'all'}`);
+  console.log(`Allowed users: ${allowedUsers.length ? allowedUsers.join(', ') : 'all'}`);
+  console.log(`Allowed groups: ${allowedGroups.length ? allowedGroups.join(', ') : 'none'}`);
   console.log(`Ports: ${exposedPorts.length ? exposedPorts.join(', ') : 'none'}`);
   
   const bot = createBot(config);
