@@ -85,8 +85,8 @@ const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
 // In-memory storage for pending approvals
 const pendingApprovals = new Map<string, PendingApproval>();
 
-// Approval timeout (2 minutes)
-const APPROVAL_TIMEOUT = 2 * 60 * 1000;
+// Approval timeout (60 seconds - must be less than Telegraf's 90s timeout)
+const APPROVAL_TIMEOUT = 60 * 1000;
 
 /**
  * Check if command is dangerous
