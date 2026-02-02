@@ -722,8 +722,8 @@ export function createBot(config: BotConfig) {
     return next();
   });
   
-  // Check if should respond (groups: only @mention or reply)
-  function shouldRespond(ctx: Context & { message?: any }): { respond: boolean; text: string } {
+  // Check if should respond (groups: @mention, reply, or random ~10%)
+  function shouldRespond(ctx: Context & { message?: any }): { respond: boolean; text: string; isRandom?: boolean } {
     const msg = ctx.message;
     if (!msg?.text) return { respond: false, text: '' };
     
@@ -751,6 +751,12 @@ export function createBot(config: BotConfig) {
           ? msg.text.replace(new RegExp(`@${botUsername}\\s*`, 'gi'), '').trim()
           : msg.text;
         return { respond: true, text: cleanText || msg.text };
+      }
+      
+      // Random trigger ~10% - bot randomly joins conversation
+      if (Math.random() < 0.10 && msg.text.length > 15) {
+        console.log(`[random] Bot decided to chime in!`);
+        return { respond: true, text: msg.text, isRandom: true };
       }
       
       return { respond: false, text: '' };
@@ -859,8 +865,13 @@ export function createBot(config: BotConfig) {
     const userId = ctx.from?.id;
     if (!userId) return;
     
-    const { respond, text } = shouldRespond(ctx);
+    const { respond, text, isRandom } = shouldRespond(ctx);
     if (!respond || !text) return;
+    
+    // If random trigger, add context hint for the agent
+    const messageForAgent = isRandom 
+      ? `[Ты случайно увидел это сообщение и решил прокомментировать. НЕ отвечай как на запрос - просто вклинься в разговор, пошути или прокомментируй]\n\n${text}`
+      : text;
     
     const sessionId = userId.toString();
     const messageId = ctx.message.message_id;
@@ -929,7 +940,7 @@ export function createBot(config: BotConfig) {
       try {
         // Run agent with tool status updates
         // Pass chatType to restrict dangerous commands in groups
-        const response = await agent.run(sessionId, text, async (toolName) => {
+        const response = await agent.run(sessionId, messageForAgent, async (toolName) => {
           logGlobal(userId, 'tool', toolName);
           
           const tracker = toolTrackers.get(userId)!;
