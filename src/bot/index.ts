@@ -259,8 +259,8 @@ export function createBot(config: BotConfig) {
         const emoji = addedEmojis.join('');
         console.log(`[reaction-received] ${username} reacted ${emoji}`);
         
-        // Save to chat history
-        saveChatMessage(username, `отреагировал ${emoji}`, false);
+        // Save to chat history (per-chat)
+        saveChatMessage(username, `отреагировал ${emoji}`, false, chatId);
       }
     } catch (e) {
       // Ignore reaction errors
@@ -282,9 +282,10 @@ export function createBot(config: BotConfig) {
         return next();
       }
       
-      // Save to chat history regardless
+      // Save to chat history regardless (per-chat)
       const username = msg.from?.username || msg.from?.first_name || 'anon';
-      saveChatMessage(username, msg.text);
+      const chatId = ctx.chat?.id;
+      saveChatMessage(username, msg.text, false, chatId);
       
       // Check if should react
       if (shouldReact(msg.text)) {
@@ -420,7 +421,7 @@ export function createBot(config: BotConfig) {
     // Save to chat history (only for private chats, groups are saved in reaction handler)
     const chatType = ctx.chat?.type;
     if (chatType === 'private') {
-      saveChatMessage(username, text);
+      saveChatMessage(username, text, false, chatId);
     }
     
     // Detect prompt injection attempts
@@ -539,8 +540,8 @@ export function createBot(config: BotConfig) {
           }
         }
         
-        // Save bot response to chat history
-        saveChatMessage('LocalTopSH', finalResponse.slice(0, CONFIG.messages.historySliceLength), true);
+        // Save bot response to chat history (per-chat)
+        saveChatMessage('LocalTopSH', finalResponse.slice(0, CONFIG.messages.historySliceLength), true, chatId);
         
         // Periodic troll message
         if (shouldTroll()) {
@@ -548,7 +549,7 @@ export function createBot(config: BotConfig) {
           const trollMsg = getTrollMessage();
           const trollSent = await safeSend(chatId, () => ctx.reply(trollMsg));
           if (trollSent?.message_id) recordBotMessage(chatId, trollSent.message_id);
-          saveChatMessage('LocalTopSH', trollMsg, true);
+          saveChatMessage('LocalTopSH', trollMsg, true, chatId);
         }
       } catch (e: any) {
         clearInterval(typing);

@@ -11,14 +11,26 @@ import { CONFIG } from '../config.js';
 const MEMORY_FILE = 'MEMORY.md';
 // Global files in a shared directory
 const SHARED_DIR = '/workspace/_shared';
+const CHATS_DIR = `${SHARED_DIR}/chats`;
 const GLOBAL_LOG_FILE = `${SHARED_DIR}/GLOBAL_LOG.md`;
-const CHAT_HISTORY_FILE = `${SHARED_DIR}/CHAT_HISTORY.md`;
 
-// Ensure shared directory exists
+// Ensure directories exist
 function ensureSharedDir() {
   if (!existsSync(SHARED_DIR)) {
     mkdirSync(SHARED_DIR, { recursive: true });
   }
+}
+
+function ensureChatsDir() {
+  ensureSharedDir();
+  if (!existsSync(CHATS_DIR)) {
+    mkdirSync(CHATS_DIR, { recursive: true });
+  }
+}
+
+// Get chat history file path for a specific chat
+function getChatHistoryFile(chatId: number | string): string {
+  return `${CHATS_DIR}/chat_${chatId}.md`;
 }
 
 // Track message count for periodic trolling
@@ -89,44 +101,49 @@ export function getTrollMessage(): string {
 }
 
 /**
- * Save message to chat history (visible to all agents)
+ * Save message to chat history (per-chat files)
  */
-export function saveChatMessage(username: string, text: string, isBot = false) {
+export function saveChatMessage(username: string, text: string, isBot = false, chatId?: number | string) {
   try {
-    ensureSharedDir();
+    ensureChatsDir();
     const timestamp = new Date().toISOString().slice(11, 16); // HH:MM
     const prefix = isBot ? '🤖' : '👤';
     const line = `${timestamp} ${prefix} ${username}: ${text.slice(0, CONFIG.storage.chatMessageLength).replace(/\n/g, ' ')}\n`;
     
+    // If no chatId provided, use default "global" 
+    const historyFile = chatId ? getChatHistoryFile(chatId) : `${CHATS_DIR}/chat_global.md`;
+    
     let content = '';
-    if (existsSync(CHAT_HISTORY_FILE)) {
-      content = readFileSync(CHAT_HISTORY_FILE, 'utf-8');
+    if (existsSync(historyFile)) {
+      content = readFileSync(historyFile, 'utf-8');
     }
     
     // Add new line
     content += line;
     
-    // Keep only last N messages
+    // Keep only last N messages per chat
     const lines = content.split('\n').filter(l => l.trim());
     if (lines.length > CONFIG.storage.maxChatMessages) {
       content = lines.slice(-CONFIG.storage.maxChatMessages).join('\n') + '\n';
     }
     
-    writeFileSync(CHAT_HISTORY_FILE, content, 'utf-8');
+    writeFileSync(historyFile, content, 'utf-8');
   } catch (e) {
     console.error('[saveChatMessage] Error:', e);
   }
 }
 
 /**
- * Get chat history for system prompt injection
+ * Get chat history for system prompt injection (per-chat)
  */
-export function getChatHistory(): string | null {
+export function getChatHistory(chatId?: number | string): string | null {
   try {
-    if (!existsSync(CHAT_HISTORY_FILE)) {
+    const historyFile = chatId ? getChatHistoryFile(chatId) : `${CHATS_DIR}/chat_global.md`;
+    
+    if (!existsSync(historyFile)) {
       return null;
     }
-    const content = readFileSync(CHAT_HISTORY_FILE, 'utf-8');
+    const content = readFileSync(historyFile, 'utf-8');
     if (content.trim().length < 20) {
       return null;
     }

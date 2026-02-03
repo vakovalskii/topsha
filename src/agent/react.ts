@@ -65,6 +65,7 @@ export class ReActAgent {
   private openai: OpenAI;
   private config: AgentConfig;
   private sessions = new Map<string, Session>();
+  private currentChatId?: number;  // Set during run() for chat history
   
   constructor(config: AgentConfig) {
     this.config = {
@@ -128,8 +129,8 @@ ${memoryContent}
 </MEMORY>`;
     }
     
-    // Add recent chat history (group context)
-    const chatHistory = getChatHistory();
+    // Add recent chat history (per-chat, uses currentChatId)
+    const chatHistory = getChatHistory(this.currentChatId);
     if (chatHistory) {
       const lineCount = chatHistory.split('\n').filter(l => l.trim()).length;
       prompt += `\n\n<RECENT_CHAT>
@@ -176,6 +177,9 @@ ${chatHistory}
     chatId?: number,
     chatType?: 'private' | 'group' | 'supergroup' | 'channel'
   ): Promise<string> {
+    // Set current chat ID for history retrieval
+    this.currentChatId = chatId;
+    
     const session = this.getSession(sessionId, this.config.cwd);
     const dateStr = new Date().toISOString().slice(0, 10);
     const currentUserMsg = `[${dateStr}] ${userMessage}`;

@@ -52,7 +52,7 @@ export function startAutonomousMessages(bot: Telegraf) {
         const thought = BOT_THOUGHTS[Math.floor(Math.random() * BOT_THOUGHTS.length)];
         try {
           await bot.telegram.sendMessage(mainGroupChatId, thought);
-          saveChatMessage('LocalTopSH', thought, true);
+          saveChatMessage('LocalTopSH', thought, true, mainGroupChatId);
           console.log(`[thought] Sent: ${thought}`);
         } catch (e: any) {
           console.log(`[thought] Failed: ${e.message?.slice(0, 50)}`);
