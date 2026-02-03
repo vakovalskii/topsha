@@ -60,6 +60,30 @@
 | `get_meme` | Random meme/dog/cat |
 | `schedule_task` | Delayed messages/commands |
 
+## Configuration
+
+All bot settings in one file: `src/config.ts`
+
+| Section | What it controls |
+|---------|------------------|
+| `rateLimit` | Telegram API intervals, retries |
+| `timeouts` | Tool execution, commands, API calls |
+| `agent` | Max iterations, history, blocked limit |
+| `bot` | Response delays, typing interval |
+| `reactions` | Emoji chance, categories, weights |
+| `thoughts` | Autonomous messages interval |
+| `messages` | Max lengths, trimming |
+| `storage` | Chat history limit, memory size |
+| `admin` | Bot owner ID |
+
+```typescript
+// Example: change reaction chance from 15% to 25%
+CONFIG.reactions.randomChance = 0.25;
+
+// Example: increase tool timeout to 3 minutes
+CONFIG.timeouts.toolExecution = 180_000;
+```
+
 ## Quick Start
 
 ```bash
@@ -77,8 +101,8 @@ docker compose up -d
 
 ## Security
 
-**217 regex patterns** protecting against attacks:
-- 161 BLOCKED (never allowed)
+**241 regex patterns** protecting against attacks:
+- 185 BLOCKED (never allowed)
 - 56 DANGEROUS (require approval in DM)
 
 Categories:
@@ -103,9 +127,10 @@ Architecture:
 ├── proxy/                # Internal API proxy
 │   └── index.js
 └── src/
+    ├── config.ts         # All settings in one place
     ├── agent/            # ReAct loop
-    ├── bot/              # Telegram bot
-    ├── approvals/        # Command security
+    ├── bot/              # Telegram bot (10 modules)
+    ├── approvals/        # Command security + 241 patterns
     └── tools/            # 13 tools
 ```
 

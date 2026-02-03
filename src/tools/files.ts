@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, lstatSy
 import { join, dirname, resolve, basename } from 'path';
 import fg from 'fast-glob';
 import { execSync } from 'child_process';
+import { CONFIG } from '../config.js';
 
 // Files that should NEVER be read - contain secrets
 const SENSITIVE_FILES = [
@@ -576,7 +577,7 @@ export async function executeSearchText(
     
     const escapedPattern = args.pattern.replace(/"/g, '\\"');
     const cmd = `grep ${flags.join(' ')} "${escapedPattern}" "${searchPath}" 2>/dev/null | head -200`;
-    const output = execSync(cmd, { encoding: 'utf-8', cwd, timeout: 30000 });
+    const output = execSync(cmd, { encoding: 'utf-8', cwd, timeout: CONFIG.timeouts.grepTimeout });
     return { success: true, output: output || "(no matches)" };
   } catch {
     return { success: true, output: "(no matches)" };

@@ -43,7 +43,8 @@ Telegram бот с ReAct агентом, который дает пользов�
 
 | Файл | Что патчить |
 |------|-------------|
-| `src/approvals/index.ts` | BLOCKED_PATTERNS, DANGEROUS_PATTERNS |
+| `src/config.ts` | Все настройки в одном месте |
+| `src/approvals/blocked-patterns.json` | 241 security patterns |
 | `src/tools/bash.ts` | SECRET_PATTERNS, sanitizeOutput() |
 | `src/bot/security.ts` | PROMPT_INJECTION_PATTERNS |
 | `src/agent/system.txt` | Системный промпт агента |
@@ -87,4 +88,12 @@ cat workspace/_shared/CHAT_HISTORY.md | tail -100
 1. Проверить `docker ps` - все контейнеры должны быть Up
 2. Проверить `docker logs gateway` на ошибки
 3. Если OOM - увеличить memory limit в docker-compose.yml
-4. Если rate limit - подождать или увеличить интервалы в rate-limiter.ts
+4. Если rate limit - подождать или увеличить интервалы в `src/config.ts`
+
+## Centralized Config
+
+Все настройки в `src/config.ts`:
+- Rate limits, timeouts, agent behavior
+- Reactions, thoughts, messages
+- Storage limits (chat history, memory)
+- Admin ID, valid emojis

@@ -3,6 +3,8 @@
  * search_web (via Proxy or direct Z.AI), fetch_page
  */
 
+import { CONFIG } from '../config.js';
+
 interface SearchResult {
   title: string;
   url: string;
@@ -189,7 +191,7 @@ async function readPageZai(url: string, apiKey: string): Promise<string> {
       url,
       return_format: 'markdown',
       retain_images: false,
-      timeout: 30,
+      timeout: Math.floor(CONFIG.timeouts.webFetch / 1000),
     }),
   });
   

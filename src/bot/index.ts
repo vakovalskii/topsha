@@ -57,6 +57,7 @@ import {
   setupAllHandlers, 
   pendingQuestions 
 } from './handlers.js';
+import { CONFIG, getRandomDoneEmoji } from '../config.js';
 import { 
   setupAllCommands, 
   isAfk 
@@ -166,7 +167,7 @@ export function createBot(config: BotConfig) {
       const timeout = setTimeout(() => {
         pendingQuestions.delete(id);
         reject(new Error('Question timeout'));
-      }, 2 * 60 * 1000);
+      }, CONFIG.timeouts.questionPending);
       
       pendingQuestions.set(id, {
         id,
@@ -337,8 +338,8 @@ export function createBot(config: BotConfig) {
         return { respond: true, text: cleanText || msg.text };
       }
       
-      // Random trigger ~10% - bot randomly joins conversation
-      if (Math.random() < 0.10 && msg.text.length > 15) {
+      // Random trigger - bot randomly joins conversation
+      if (Math.random() < CONFIG.triggers.randomReplyChance && msg.text.length > CONFIG.triggers.minTextForRandom) {
         console.log(`[random] Bot decided to chime in!`);
         return { respond: true, text: msg.text, isRandom: true };
       }
@@ -414,7 +415,7 @@ export function createBot(config: BotConfig) {
     console.log(`\n[IN] @${username} (${userId}):\n${text}\n`);
     
     // Log to global activity log
-    logGlobal(userId, 'message', text.slice(0, 80));
+    logGlobal(userId, 'message', text.slice(0, CONFIG.messages.logSliceLength));
     
     // Save to chat history (only for private chats, groups are saved in reaction handler)
     const chatType = ctx.chat?.type;
@@ -449,15 +450,15 @@ export function createBot(config: BotConfig) {
       const agent = getAgent(userId);
       
       // Just send typing action periodically (no status messages to avoid rate limits)
-      const typing = setInterval(() => ctx.sendChatAction('typing').catch(() => {}), 5000);
+      const typing = setInterval(() => ctx.sendChatAction('typing').catch(() => {}), CONFIG.bot.typingInterval);
       
       // Initialize tool tracker for this user
       toolTrackers.set(userId, { tools: [], lastUpdate: 0 });
       let statusMsgId: number | undefined;
       
       try {
-        // Small random delay to feel more human (0.5-2 sec)
-        const thinkDelay = 500 + Math.random() * 1500;
+        // Small random delay to feel more human
+        const thinkDelay = CONFIG.bot.thinkDelayMin + Math.random() * (CONFIG.bot.thinkDelayMax - CONFIG.bot.thinkDelayMin);
         await new Promise(resolve => setTimeout(resolve, thinkDelay));
         
         // Run agent with tool status updates
@@ -502,9 +503,9 @@ export function createBot(config: BotConfig) {
         // Clear tracker
         toolTrackers.delete(userId);
         
-        // Change reaction to done
+        // Change reaction to done (random positive emoji - all tested working!)
         try {
-          await ctx.telegram.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: '👍' as any }]);
+          await ctx.telegram.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: getRandomDoneEmoji() as any }]);
         } catch {}
         
         // Send final response with rate limiting
@@ -539,11 +540,11 @@ export function createBot(config: BotConfig) {
         }
         
         // Save bot response to chat history
-        saveChatMessage('LocalTopSH', finalResponse.slice(0, 500), true);
+        saveChatMessage('LocalTopSH', finalResponse.slice(0, CONFIG.messages.historySliceLength), true);
         
         // Periodic troll message
         if (shouldTroll()) {
-          await new Promise(r => setTimeout(r, 2000));  // Wait a bit
+          await new Promise(r => setTimeout(r, CONFIG.bot.trollDelay));  // Wait a bit
           const trollMsg = getTrollMessage();
           const trollSent = await safeSend(chatId, () => ctx.reply(trollMsg));
           if (trollSent?.message_id) recordBotMessage(chatId, trollSent.message_id);

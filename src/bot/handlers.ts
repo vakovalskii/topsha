@@ -10,6 +10,7 @@ import {
   cancelPendingCommand,
 } from '../approvals/index.js';
 import type { PendingQuestion } from './types.js';
+import { CONFIG } from '../config.js';
 
 // Pending questions storage
 export const pendingQuestions = new Map<string, PendingQuestion>();
@@ -50,8 +51,8 @@ export function setupExecuteHandler(bot: Telegraf) {
         ? (result.output || '(empty output)')
         : `Error: ${result.error}`;
       
-      const trimmedOutput = output.length > 3000 
-        ? output.slice(0, 1500) + '\n...\n' + output.slice(-1000)
+      const trimmedOutput = output.length > CONFIG.messages.outputTrimLength 
+        ? output.slice(0, CONFIG.messages.outputHeadLength) + '\n...\n' + output.slice(-CONFIG.messages.outputTailLength)
         : output;
       
       const statusEmoji = result.success ? '✅' : '❌';

@@ -2,10 +2,10 @@
  * Rate limiting and user locking
  */
 
+import { CONFIG } from '../config.js';
+
 // Global rate limiter - single queue for ALL telegram messages
 let globalLastSend = 0;
-const GLOBAL_MIN_INTERVAL = 200; // 200ms between any messages (5/sec max)
-const GROUP_MIN_INTERVAL = 5000; // 5 seconds for groups (avoid 429)
 const lastGroupMessage = new Map<number, number>();
 
 // Global mutex for sending
@@ -15,7 +15,7 @@ let sendMutex = Promise.resolve();
 export async function safeSend<T>(
   chatId: number,
   fn: () => Promise<T>,
-  maxRetries = 2
+  maxRetries = CONFIG.rateLimit.maxRetries
 ): Promise<T | null> {
   // Use mutex to serialize all sends
   const myTurn = sendMutex;
@@ -27,7 +27,7 @@ export async function safeSend<T>(
   try {
     // Global rate limit
     const now = Date.now();
-    const globalWait = GLOBAL_MIN_INTERVAL - (now - globalLastSend);
+    const globalWait = CONFIG.rateLimit.globalMinInterval - (now - globalLastSend);
     if (globalWait > 0) {
       await new Promise(r => setTimeout(r, globalWait));
     }
@@ -35,7 +35,7 @@ export async function safeSend<T>(
     // Extra delay for groups (negative chat IDs)
     if (chatId < 0) {
       const lastGroup = lastGroupMessage.get(chatId) || 0;
-      const groupWait = GROUP_MIN_INTERVAL - (Date.now() - lastGroup);
+      const groupWait = CONFIG.rateLimit.groupMinInterval - (Date.now() - lastGroup);
       if (groupWait > 0) {
         await new Promise(r => setTimeout(r, groupWait));
       }
@@ -50,7 +50,7 @@ export async function safeSend<T>(
         return await fn();
       } catch (e: any) {
         if (e.response?.error_code === 429) {
-          const retryAfter = (e.response?.parameters?.retry_after || 30) + 5; // Add buffer
+          const retryAfter = (e.response?.parameters?.retry_after || 30) + CONFIG.rateLimit.retryBuffer;
           console.log(`[rate-limit] 429, waiting ${retryAfter}s (${attempt}/${maxRetries})`);
           if (attempt < maxRetries) {
             await new Promise(r => setTimeout(r, retryAfter * 1000));
@@ -94,7 +94,7 @@ export async function withUserLock<T>(userId: number, fn: () => Promise<T>): Pro
 
 // Global concurrent users limiter
 const activeUsers = new Set<number>();
-let maxConcurrentUsers = 10;
+let maxConcurrentUsers = CONFIG.users.maxConcurrent;
 
 export function setMaxConcurrentUsers(max: number) {
   maxConcurrentUsers = max;

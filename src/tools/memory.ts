@@ -6,13 +6,13 @@
 
 import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { CONFIG } from '../config.js';
 
 const MEMORY_FILE = 'MEMORY.md';
 // Global files in a shared directory
 const SHARED_DIR = '/workspace/_shared';
 const GLOBAL_LOG_FILE = `${SHARED_DIR}/GLOBAL_LOG.md`;
 const CHAT_HISTORY_FILE = `${SHARED_DIR}/CHAT_HISTORY.md`;
-const MAX_CHAT_MESSAGES = 500; // Keep last N messages
 
 // Ensure shared directory exists
 function ensureSharedDir() {
@@ -32,7 +32,7 @@ export function logGlobal(userId: number | string, action: string, details?: str
   try {
     ensureSharedDir();
     const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    const line = `| ${timestamp} | ${userId} | ${action} | ${details?.slice(0, 100) || '-'} |\n`;
+    const line = `| ${timestamp} | ${userId} | ${action} | ${details?.slice(0, CONFIG.storage.logDetailsLength) || '-'} |\n`;
     
     if (!existsSync(GLOBAL_LOG_FILE)) {
       const header = `# Global Activity Log\n\n| Time | User | Action | Details |\n|------|------|--------|--------|\n`;
@@ -96,7 +96,7 @@ export function saveChatMessage(username: string, text: string, isBot = false) {
     ensureSharedDir();
     const timestamp = new Date().toISOString().slice(11, 16); // HH:MM
     const prefix = isBot ? '🤖' : '👤';
-    const line = `${timestamp} ${prefix} ${username}: ${text.slice(0, 200).replace(/\n/g, ' ')}\n`;
+    const line = `${timestamp} ${prefix} ${username}: ${text.slice(0, CONFIG.storage.chatMessageLength).replace(/\n/g, ' ')}\n`;
     
     let content = '';
     if (existsSync(CHAT_HISTORY_FILE)) {
@@ -108,8 +108,8 @@ export function saveChatMessage(username: string, text: string, isBot = false) {
     
     // Keep only last N messages
     const lines = content.split('\n').filter(l => l.trim());
-    if (lines.length > MAX_CHAT_MESSAGES) {
-      content = lines.slice(-MAX_CHAT_MESSAGES).join('\n') + '\n';
+    if (lines.length > CONFIG.storage.maxChatMessages) {
+      content = lines.slice(-CONFIG.storage.maxChatMessages).join('\n') + '\n';
     }
     
     writeFileSync(CHAT_HISTORY_FILE, content, 'utf-8');
@@ -224,10 +224,9 @@ export function getMemoryForPrompt(cwd: string): string | null {
       return null;  // Too short, probably just header
     }
     
-    // Limit to last ~2000 chars to not overflow context
-    const maxLen = 2000;
-    if (content.length > maxLen) {
-      return '...(truncated)...\n' + content.slice(-maxLen);
+    // Limit to last N chars to not overflow context
+    if (content.length > CONFIG.storage.maxMemoryChars) {
+      return '...(truncated)...\n' + content.slice(-CONFIG.storage.maxMemoryChars);
     }
     return content;
   } catch {

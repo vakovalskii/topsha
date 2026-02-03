@@ -14,6 +14,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as tools from '../tools/index.js';
 import { getMemoryForPrompt, getChatHistory } from '../tools/memory.js';
+import { CONFIG } from '../config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SYSTEM_PROMPT_FILE = join(__dirname, 'system.txt');
@@ -67,8 +68,8 @@ export class ReActAgent {
   
   constructor(config: AgentConfig) {
     this.config = {
-      maxIterations: 15,  // Reduced from 30 to prevent long loops
-      maxHistory: 10,  // keep last 10 conversations
+      maxIterations: CONFIG.agent.maxIterations,
+      maxHistory: CONFIG.agent.maxHistory,
       exposedPorts: [],
       ...config,
     };
@@ -184,7 +185,6 @@ ${chatHistory}
     let iteration = 0;
     let finalResponse = '';
     let blockedCount = 0;  // Track consecutive BLOCKED errors
-    const MAX_BLOCKED = 3;  // Stop after 3 BLOCKED commands
     
     // ReAct loop: Think → Act → Observe
     while (iteration < this.config.maxIterations!) {
@@ -281,7 +281,7 @@ ${chatHistory}
             hasBlocked = true;
             blockedCount++;
             output += '\n\n⛔ THIS COMMAND IS PERMANENTLY BLOCKED. Do NOT retry it. Find an alternative approach or inform the user this action is not allowed.';
-            console.log(`[SECURITY] BLOCKED count: ${blockedCount}/${MAX_BLOCKED}`);
+            console.log(`[SECURITY] BLOCKED count: ${blockedCount}/${CONFIG.agent.maxBlockedCommands}`);
           }
           
           workingMessages.push({
@@ -292,7 +292,7 @@ ${chatHistory}
         }
         
         // Stop if too many BLOCKED commands (prevent loops)
-        if (blockedCount >= MAX_BLOCKED) {
+        if (blockedCount >= CONFIG.agent.maxBlockedCommands) {
           console.log(`[SECURITY] Too many BLOCKED commands (${blockedCount}), stopping agent`);
           finalResponse = '🚫 Stopped: Multiple blocked commands detected. The requested actions are not allowed for security reasons.';
           break;

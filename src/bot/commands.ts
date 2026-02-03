@@ -9,6 +9,7 @@ import { toolNames, saveChatMessage } from '../tools/index.js';
 import { getSessionPendingCommands } from '../approvals/index.js';
 import { escapeHtml } from './formatters.js';
 import type { BotConfig } from './types.js';
+import { CONFIG } from '../config.js';
 
 // AFK state
 let afkUntil = 0;
@@ -117,14 +118,14 @@ export function setupPendingCommand(bot: Telegraf) {
 export function setupAfkCommand(bot: Telegraf) {
   bot.command('afk', async (ctx) => {
     const userId = ctx.from?.id;
-    // Only allow specific admin (VaKovaLskii)
-    if (userId !== 809532582) {
+    // Only allow admin from config
+    if (userId !== CONFIG.admin.userId) {
       await ctx.reply('Только хозяин может меня отправить по делам 😏');
       return;
     }
     
     const args = ctx.message?.text?.split(' ').slice(1) || [];
-    const minutes = parseInt(args[0]) || 5;
+    const minutes = parseInt(args[0]) || CONFIG.afk.defaultMinutes;
     const reason = args.slice(1).join(' ') || 'ушёл по делам';
     
     if (minutes <= 0) {
@@ -134,8 +135,8 @@ export function setupAfkCommand(bot: Telegraf) {
       return;
     }
     
-    // Set AFK (max 60 min)
-    const actualMinutes = Math.min(minutes, 60);
+    // Set AFK (max from config)
+    const actualMinutes = Math.min(minutes, CONFIG.afk.maxMinutes);
     setAfk(actualMinutes, reason);
     
     await ctx.reply(`Ладно, ${reason}. Буду через ${actualMinutes} мин ✌️`);

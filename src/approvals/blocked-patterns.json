@@ -1445,6 +1445,67 @@
       "category": "escape",
       "pattern": "\\/sys\\/fs\\/cgroup.*notify_on_release",
       "reason": "BLOCKED: cgroup notify escape"
+    },
+
+    {
+      "id": "reverse-string-trick",
+      "category": "obfuscation",
+      "pattern": "\\[::-1\\]",
+      "reason": "BLOCKED: String reversal (obfuscation technique)"
+    },
+    {
+      "id": "importlib-import",
+      "category": "code_execution",
+      "pattern": "importlib\\.import_module",
+      "reason": "BLOCKED: Dynamic module import"
+    },
+    {
+      "id": "getattr-module",
+      "category": "code_execution",
+      "pattern": "getattr\\s*\\([^,]+,\\s*['\"]",
+      "reason": "BLOCKED: Dynamic attribute access"
+    },
+    {
+      "id": "exec-builtin",
+      "category": "code_execution",
+      "pattern": "\\bexec\\s*\\(",
+      "reason": "BLOCKED: exec() call"
+    },
+    {
+      "id": "compile-builtin",
+      "category": "code_execution",
+      "pattern": "\\bcompile\\s*\\(",
+      "reason": "BLOCKED: compile() call"
+    },
+    {
+      "id": "builtins-access",
+      "category": "code_execution",
+      "pattern": "__builtins__|__import__|__globals__|__code__",
+      "reason": "BLOCKED: Python internals access"
+    },
+    {
+      "id": "reversed-builtin",
+      "category": "obfuscation",
+      "pattern": "\\breversed\\s*\\(",
+      "reason": "BLOCKED: reversed() for obfuscation"
+    },
+    {
+      "id": "join-reverse-pattern",
+      "category": "obfuscation",
+      "pattern": "join\\s*\\(.*\\)\\s*\\[::-1\\]",
+      "reason": "BLOCKED: Join + reverse obfuscation"
+    },
+    {
+      "id": "chr-ord-decode",
+      "category": "obfuscation",
+      "pattern": "chr\\s*\\(\\s*\\d+\\s*\\)",
+      "reason": "BLOCKED: chr() character building"
+    },
+    {
+      "id": "bytes-decode",
+      "category": "obfuscation",
+      "pattern": "bytes\\s*\\(\\s*\\[.*\\]\\s*\\)\\.decode",
+      "reason": "BLOCKED: bytes array decoding"
     }
   ]
 }

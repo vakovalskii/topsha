@@ -3,6 +3,7 @@
  */
 
 import type { ToolTracker } from './types.js';
+import { CONFIG } from '../config.js';
 
 // Tool name → emoji
 export function toolEmoji(name: string): string {
@@ -118,5 +119,5 @@ export function getToolComment(toolName: string, isError = false): string {
 
 // Track tools for batched status updates
 export const toolTrackers = new Map<number, ToolTracker>();
-export const TOOL_UPDATE_INTERVAL = 5; // Update every N tools
-export const MIN_EDIT_INTERVAL_MS = 3000; // Minimum 3 seconds between edits
+export const TOOL_UPDATE_INTERVAL = CONFIG.status.toolUpdateInterval;
+export const MIN_EDIT_INTERVAL_MS = CONFIG.status.minEditInterval;

@@ -4,6 +4,7 @@
 
 import { Telegraf } from 'telegraf';
 import { saveChatMessage } from '../tools/index.js';
+import { CONFIG } from '../config.js';
 
 // Bot's random thoughts to share
 export const BOT_THOUGHTS = [
@@ -37,9 +38,15 @@ export function getMainGroupChatId(): number | null {
 
 // Send random thought to group periodically
 export function startAutonomousMessages(bot: Telegraf) {
-  // Random interval between 10-30 minutes
+  if (!CONFIG.thoughts.enabled) {
+    console.log('[thought] Autonomous messages disabled in config');
+    return;
+  }
+  
+  const { minIntervalMin, maxIntervalMin, startDelayMin } = CONFIG.thoughts;
+  
   const scheduleNext = () => {
-    const delay = (10 + Math.random() * 20) * 60 * 1000; // 10-30 min
+    const delay = (minIntervalMin + Math.random() * (maxIntervalMin - minIntervalMin)) * 60 * 1000;
     setTimeout(async () => {
       if (mainGroupChatId) {
         const thought = BOT_THOUGHTS[Math.floor(Math.random() * BOT_THOUGHTS.length)];
@@ -55,7 +62,6 @@ export function startAutonomousMessages(bot: Telegraf) {
     }, delay);
   };
   
-  // Start after 5 minutes
-  setTimeout(scheduleNext, 5 * 60 * 1000);
-  console.log('[thought] Autonomous messages enabled (10-30 min interval)');
+  setTimeout(scheduleNext, startDelayMin * 60 * 1000);
+  console.log(`[thought] Autonomous messages enabled (${minIntervalMin}-${maxIntervalMin} min interval)`);
 }

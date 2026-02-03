@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { CONFIG } from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -156,9 +157,6 @@ const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
 // In-memory storage for pending commands
 const pendingCommands = new Map<string, PendingCommand>();
 
-// Timeout for pending commands (5 minutes)
-const COMMAND_TIMEOUT = 5 * 60 * 1000;
-
 /**
  * Check if command is blocked (never allowed) or dangerous (requires approval)
  * In group chats, dangerous commands are BLOCKED (no approval possible)
@@ -239,7 +237,7 @@ export function storePendingCommand(
   // Auto-cleanup after timeout
   setTimeout(() => {
     pendingCommands.delete(id);
-  }, COMMAND_TIMEOUT);
+  }, CONFIG.timeouts.commandPending);
   
   return id;
 }

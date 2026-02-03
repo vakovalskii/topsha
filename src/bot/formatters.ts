@@ -2,6 +2,8 @@
  * Message formatting utilities
  */
 
+import { CONFIG } from '../config.js';
+
 // Escape HTML
 export function escapeHtml(text: string): string {
   return text
@@ -73,7 +75,7 @@ export function mdToHtml(text: string): string {
 }
 
 // Split long messages
-export function splitMessage(text: string, maxLen = 4000): string[] {
+export function splitMessage(text: string, maxLen = CONFIG.messages.maxLength): string[] {
   if (text.length <= maxLen) return [text];
   
   const parts: string[] = [];

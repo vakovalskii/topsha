@@ -3,6 +3,8 @@
  * Sources: Imgflip memes, random dogs, random cats
  */
 
+import { CONFIG } from '../config.js';
+
 export const definition = {
   type: "function" as const,
   function: {
@@ -43,7 +45,7 @@ async function getImgflipMeme(): Promise<ImageResult | null> {
     const now = Date.now();
     if (memesCache.length === 0 || now - cacheTime > CACHE_TTL) {
       const res = await fetch('https://api.imgflip.com/get_memes', { 
-        signal: AbortSignal.timeout(10000) 
+        signal: AbortSignal.timeout(CONFIG.timeouts.memeApi) 
       });
       if (res.ok) {
         const data = await res.json() as { success: boolean; data?: { memes: any[] } };
@@ -70,7 +72,7 @@ async function getImgflipMeme(): Promise<ImageResult | null> {
 async function getRandomDog(): Promise<ImageResult | null> {
   try {
     const res = await fetch('https://dog.ceo/api/breeds/image/random', {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(CONFIG.timeouts.memeApi),
     });
     if (!res.ok) return null;
     
@@ -94,7 +96,7 @@ async function getRandomDog(): Promise<ImageResult | null> {
 async function getRandomCat(): Promise<ImageResult | null> {
   try {
     const res = await fetch('https://api.thecatapi.com/v1/images/search', {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(CONFIG.timeouts.memeApi),
     });
     if (!res.ok) return null;
     
@@ -115,7 +117,7 @@ async function getRandomCat(): Promise<ImageResult | null> {
 async function getCatMeme(): Promise<ImageResult | null> {
   try {
     const res = await fetch('https://cataas.com/cat?json=true', {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(CONFIG.timeouts.memeApi),
     });
     if (!res.ok) return null;
     

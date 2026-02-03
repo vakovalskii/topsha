@@ -7,6 +7,7 @@
 
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
+import { CONFIG } from '../config.js';
 
 const execAsync = promisify(exec);
 import { checkCommand, storePendingCommand } from '../approvals/index.js';
@@ -324,7 +325,7 @@ export async function executeCommand(
     const { stdout, stderr } = await execAsync(command, {
       cwd,
       encoding: 'utf-8',
-      timeout: 120000, // 2 min (matches global tool timeout)
+      timeout: CONFIG.timeouts.toolExecution,
       maxBuffer: 1024 * 1024 * 10,
     });
     

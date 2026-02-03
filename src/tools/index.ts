@@ -28,6 +28,7 @@ import * as sendFile from './sendFile.js';
 import * as message from './message.js';
 import * as meme from './meme.js';
 import * as scheduler from './scheduler.js';
+import { CONFIG } from '../config.js';
 
 // Re-export callback setters
 export { setApprovalCallback } from './bash.js';
@@ -91,8 +92,7 @@ function formatArgs(args: Record<string, any>): string {
   return parts.join(', ');
 }
 
-// Timeout for all tool executions (120 seconds)
-const TOOL_TIMEOUT_MS = 120 * 1000;
+// Timeout for all tool executions (from config)
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, toolName: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -125,7 +125,7 @@ export async function execute(
   try {
     const result = await withTimeout(
       executeInternal(name, args, ctx),
-      TOOL_TIMEOUT_MS,
+      CONFIG.timeouts.toolExecution,
       name
     );
     

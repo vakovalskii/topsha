@@ -3,24 +3,26 @@
  */
 
 import OpenAI from 'openai';
+import { CONFIG, getAllReactions } from '../config.js';
 
-// Random reactions for messages (only Telegram-allowed emojis!)
-// Full list: 👍👎❤️🔥🥰👏😁🤔🤯😱🤬😢🎉🤩🤮💩🙏👌🕊🤡🥱🥴😍🐳❤️‍🔥🌚🌭💯🤣⚡🍌🏆💔🤨😐🍓🍾💋🖕😈😴😭🤓👻👨‍💻👀🎃🙈😇😨🤝✍️🤗🫡🎅🎄☃️💅🤪🗿🆒💘🙉🦄😘💊🙊😎👾🤷‍♂️🤷🤷‍♀️😡
-export const POSITIVE_REACTIONS = ['❤️', '🔥', '👍', '🎉', '💯', '🤩', '👏', '😍', '🤗', '🏆'];
-export const NEGATIVE_REACTIONS = ['💩', '👎', '🤡', '😴', '🥱', '🗿', '🤮', '💔', '😡'];
-export const NEUTRAL_REACTIONS = ['👀', '🤔', '🤨', '😐', '🌚', '👻', '🤷'];
+// Use reactions from config
+export const POSITIVE_REACTIONS = CONFIG.allReactions.positive;
+export const NEGATIVE_REACTIONS = CONFIG.allReactions.negative;
+export const NEUTRAL_REACTIONS = CONFIG.allReactions.neutral;
 
-// All available reactions for LLM to choose from
-export const ALL_REACTIONS = ['❤️', '🔥', '👍', '🎉', '💯', '🤩', '👏', '😍', '🤗', '🏆', '💩', '👎', '🤡', '😴', '🥱', '🗿', '🤮', '💔', '😡', '👀', '🤔', '🤨', '😐', '🌚', '👻', '🤷', '😂', '🤣', '😈', '🙈', '🎃', '💀', '🤯'];
+// All available reactions (from config)
+// Removed: 💀 😂 (REACTION_INVALID - tested 2026-02-03)
+export const ALL_REACTIONS = getAllReactions();
 
 export function getRandomReaction(sentiment: 'positive' | 'negative' | 'neutral' | 'random'): string {
   let pool: string[];
+  const weights = CONFIG.reactions.weights;
   
   if (sentiment === 'random') {
-    // Weighted random: 40% positive, 30% neutral, 30% negative
+    // Weighted random from config
     const rand = Math.random();
-    if (rand < 0.4) pool = POSITIVE_REACTIONS;
-    else if (rand < 0.7) pool = NEUTRAL_REACTIONS;
+    if (rand < weights.positive) pool = POSITIVE_REACTIONS;
+    else if (rand < weights.positive + weights.neutral) pool = NEUTRAL_REACTIONS;
     else pool = NEGATIVE_REACTIONS;
   } else if (sentiment === 'positive') {
     pool = POSITIVE_REACTIONS;
@@ -77,7 +79,7 @@ export async function getSmartReaction(text: string, username: string): Promise<
           content: `@${username}: ${text.slice(0, 200)}`
         }
       ],
-      max_tokens: 10,
+      max_tokens: CONFIG.reactions.llmMaxTokens,
       temperature: 0.9,
     });
     
@@ -103,20 +105,19 @@ export async function getSmartReaction(text: string, username: string): Promise<
 
 // Rate limit for reactions
 let lastReactionTime = 0;
-const MIN_REACTION_INTERVAL = 5000; // 5 seconds between reactions
 
 // Should we react to this message?
 export function shouldReact(text: string): boolean {
   const now = Date.now();
-  // Rate limit: at least 5 seconds between reactions
-  if (now - lastReactionTime < MIN_REACTION_INTERVAL) {
+  // Rate limit from config
+  if (now - lastReactionTime < CONFIG.reactions.minInterval) {
     return false;
   }
   
   // Skip messages that are mostly links
   const linkPattern = /https?:\/\/\S+/g;
   const textWithoutLinks = text.replace(linkPattern, '').trim();
-  if (textWithoutLinks.length < 10) {
+  if (textWithoutLinks.length < CONFIG.reactions.minTextLength) {
     return false; // Message is mostly a link
   }
   
@@ -125,8 +126,8 @@ export function shouldReact(text: string): boolean {
     return false;
   }
   
-  // React to ~15% of messages
-  if (Math.random() < 0.15) {
+  // React based on chance from config
+  if (Math.random() < CONFIG.reactions.randomChance) {
     lastReactionTime = now;
     return true;
   }
