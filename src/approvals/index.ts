@@ -111,6 +111,20 @@ const BLOCKED_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /process\.env/, reason: 'BLOCKED: Node.js env access' },
   { pattern: /require\s*\(\s*['"]dotenv['"]/, reason: 'BLOCKED: dotenv require' },
   
+  // NPX/NPM malicious packages (used to dump env)
+  { pattern: /npx\s+.*test.*json/i, reason: 'BLOCKED: Suspicious npx package (env dump)' },
+  { pattern: /npx\s+.*env/i, reason: 'BLOCKED: Suspicious npx package (env dump)' },
+  { pattern: /npx\s+.*dump/i, reason: 'BLOCKED: Suspicious npx dump package' },
+  { pattern: /npx\s+.*leak/i, reason: 'BLOCKED: Suspicious npx package' },
+  { pattern: /npx\s+.*secret/i, reason: 'BLOCKED: Suspicious npx package' },
+  { pattern: /npx\s+.*config/i, reason: 'BLOCKED: Suspicious npx config package' },
+  { pattern: /npx\s+.*diag/i, reason: 'BLOCKED: Suspicious npx diagnostics package' },
+  { pattern: /npx\s+.*debug/i, reason: 'BLOCKED: Suspicious npx debug package' },
+  { pattern: /npm\s+run\s+.*env/i, reason: 'BLOCKED: npm script that may leak env' },
+  { pattern: /node\s+-e\s+.*JSON\.stringify.*process/i, reason: 'BLOCKED: Node one-liner env dump' },
+  { pattern: /node\s+-p\s+.*process/i, reason: 'BLOCKED: Node print process info' },
+  { pattern: /node\s+--print.*process/i, reason: 'BLOCKED: Node print process info' },
+  
   // Shell variable expansion tricks
   { pattern: /\$\{.*\}/, reason: 'BLOCKED: Shell variable expansion' },
   { pattern: /\$[A-Z_]+/, reason: 'BLOCKED: Environment variable reference' },

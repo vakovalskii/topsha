@@ -18,7 +18,7 @@ const SECRET_PATTERNS = [
   // Common key formats
   /sk-[A-Za-z0-9]{20,}/g,  // OpenAI-style keys
   /tvly-[A-Za-z0-9-]{20,}/g,  // Tavily keys
-  /[a-f0-9]{32}\.[A-Za-z0-9]{20,}/g,  // ZAI-style keys
+  /[a-f0-9]{32}\.[A-Za-z0-9]{10,}/g,  // ZAI-style keys (lowered threshold)
   /ghp_[A-Za-z0-9]{36,}/g,  // GitHub tokens
   /gho_[A-Za-z0-9]{36,}/g,  // GitHub OAuth
   /github_pat_[A-Za-z0-9_]{36,}/g,  // GitHub PAT
@@ -32,13 +32,75 @@ const SECRET_PATTERNS = [
   // Private keys
   /-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----/g,
   // Generic secrets with common env var names
-  /(?:TELEGRAM_TOKEN|API_KEY|APIKEY|ZAI_API_KEY|TAVILY_API_KEY)=\S+/gi,
+  /(?:TELEGRAM_TOKEN|API_KEY|APIKEY|ZAI_API_KEY|TAVILY_API_KEY|BASE_URL)=\S+/gi,
 ];
+
+// Detect base64 encoded env dumps (like the attack used)
+function containsEncodedSecrets(output: string): boolean {
+  // Look for long base64 strings (potential env dump)
+  const base64Pattern = /[A-Za-z0-9+/]{100,}={0,2}/g;
+  const matches = output.match(base64Pattern);
+  
+  if (matches) {
+    for (const match of matches) {
+      try {
+        const decoded = Buffer.from(match, 'base64').toString('utf-8');
+        // Check if decoded content looks like env vars
+        if (
+          decoded.includes('API_KEY') ||
+          decoded.includes('TOKEN') ||
+          decoded.includes('SECRET') ||
+          decoded.includes('PASSWORD') ||
+          decoded.includes('TELEGRAM') ||
+          decoded.includes('process.env') ||
+          decoded.includes('ZAI_') ||
+          /[a-f0-9]{32}\.[A-Za-z0-9]{10,}/.test(decoded)  // ZAI key pattern
+        ) {
+          return true;
+        }
+      } catch {
+        // Not valid base64, ignore
+      }
+    }
+  }
+  return false;
+}
+
+// Check if output contains suspicious patterns even in plaintext
+function containsSuspiciousEnvDump(output: string): boolean {
+  // JSON with multiple env-like keys = probably env dump
+  const envKeyCount = (output.match(/"[A-Z_]{3,}":/g) || []).length;
+  if (envKeyCount > 5) {
+    // Looks like JSON env dump, check for sensitive keys
+    if (
+      output.includes('"API_KEY"') ||
+      output.includes('"TOKEN"') ||
+      output.includes('"SECRET"') ||
+      output.includes('"ZAI_') ||
+      output.includes('"TELEGRAM')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Remove secrets from output
  */
 function sanitizeOutput(output: string): string {
+  // First check for encoded/disguised secrets
+  if (containsEncodedSecrets(output)) {
+    console.log('[SECURITY] Detected base64-encoded secrets in output, blocking');
+    return '🚫 [OUTPUT BLOCKED: Contains encoded sensitive data]';
+  }
+  
+  // Check for env dump patterns
+  if (containsSuspiciousEnvDump(output)) {
+    console.log('[SECURITY] Detected env dump pattern in output, blocking');
+    return '🚫 [OUTPUT BLOCKED: Looks like environment dump]';
+  }
+  
   let sanitized = output;
   
   for (const pattern of SECRET_PATTERNS) {
