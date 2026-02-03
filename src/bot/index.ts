@@ -8,536 +8,68 @@ import { mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import OpenAI from 'openai';
 import { ReActAgent } from '../agent/react.js';
-import { toolNames, setApprovalCallback, setAskCallback, setSendFileCallback, setDeleteMessageCallback, setEditMessageCallback, recordBotMessage, setSendMessageCallback, startScheduler, logGlobal, getGlobalLog, shouldTroll, getTrollMessage, saveChatMessage, setProxyUrl } from '../tools/index.js';
-import { executeCommand } from '../tools/bash.js';
 import { 
-  consumePendingCommand, 
-  cancelPendingCommand, 
-  getSessionPendingCommands 
-} from '../approvals/index.js';
+  toolNames, 
+  setApprovalCallback, 
+  setAskCallback, 
+  setSendFileCallback, 
+  setDeleteMessageCallback, 
+  setEditMessageCallback, 
+  recordBotMessage, 
+  setSendMessageCallback, 
+  startScheduler, 
+  logGlobal, 
+  shouldTroll, 
+  getTrollMessage, 
+  saveChatMessage, 
+  setProxyUrl 
+} from '../tools/index.js';
 
-// Pending user questions (ask_user tool)
-interface PendingQuestion {
-  id: string;
-  resolve: (answer: string) => void;
-}
-const pendingQuestions = new Map<string, PendingQuestion>();
+// Import bot modules
+import type { BotConfig, PendingQuestion } from './types.js';
+import { 
+  safeSend, 
+  withUserLock, 
+  setMaxConcurrentUsers, 
+  canAcceptUser, 
+  markUserActive, 
+  markUserInactive 
+} from './rate-limiter.js';
+import { detectPromptInjection } from './security.js';
+import { escapeHtml, mdToHtml, splitMessage } from './formatters.js';
+import { 
+  initReactionLLM, 
+  shouldReact, 
+  getSmartReaction 
+} from './reactions.js';
+import { 
+  toolEmoji, 
+  getToolComment, 
+  toolTrackers, 
+  TOOL_UPDATE_INTERVAL, 
+  MIN_EDIT_INTERVAL_MS 
+} from './tools-ui.js';
+import { 
+  setMainGroupChatId, 
+  startAutonomousMessages 
+} from './thoughts.js';
+import { 
+  setupAllHandlers, 
+  pendingQuestions 
+} from './handlers.js';
+import { 
+  setupAllCommands, 
+  isAfk 
+} from './commands.js';
 
-// Global rate limiter - single queue for ALL telegram messages
-let globalLastSend = 0;
-const GLOBAL_MIN_INTERVAL = 200; // 200ms between any messages (5/sec max)
-const GROUP_MIN_INTERVAL = 5000; // 5 seconds for groups (avoid 429)
-const lastGroupMessage = new Map<number, number>();
-
-// Global mutex for sending
-let sendMutex = Promise.resolve();
-
-// Safe send with global rate limiting
-async function safeSend<T>(
-  chatId: number,
-  fn: () => Promise<T>,
-  maxRetries = 2
-): Promise<T | null> {
-  // Use mutex to serialize all sends
-  const myTurn = sendMutex;
-  let release: () => void;
-  sendMutex = new Promise(r => { release = r; });
-  
-  await myTurn;
-  
-  try {
-    // Global rate limit
-    const now = Date.now();
-    const globalWait = GLOBAL_MIN_INTERVAL - (now - globalLastSend);
-    if (globalWait > 0) {
-      await new Promise(r => setTimeout(r, globalWait));
-    }
-    
-    // Extra delay for groups (negative chat IDs)
-    if (chatId < 0) {
-      const lastGroup = lastGroupMessage.get(chatId) || 0;
-      const groupWait = GROUP_MIN_INTERVAL - (Date.now() - lastGroup);
-      if (groupWait > 0) {
-        await new Promise(r => setTimeout(r, groupWait));
-      }
-      lastGroupMessage.set(chatId, Date.now());
-    }
-    
-    globalLastSend = Date.now();
-    
-    // Retry logic
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await fn();
-      } catch (e: any) {
-        if (e.response?.error_code === 429) {
-          const retryAfter = (e.response?.parameters?.retry_after || 30) + 5; // Add buffer
-          console.log(`[rate-limit] 429, waiting ${retryAfter}s (${attempt}/${maxRetries})`);
-          if (attempt < maxRetries) {
-            await new Promise(r => setTimeout(r, retryAfter * 1000));
-            globalLastSend = Date.now(); // Reset after wait
-          }
-        } else {
-          console.error(`[send] Error: ${e.message?.slice(0, 100)}`);
-          return null;
-        }
-      }
-    }
-    console.error(`[send] Failed for chat ${chatId}`);
-    return null;
-  } finally {
-    release!();
-  }
-}
-
-// Per-user rate limiter (max 1 concurrent request)
-const userLocks = new Map<number, Promise<void>>();
-async function withUserLock<T>(userId: number, fn: () => Promise<T>): Promise<T> {
-  const existing = userLocks.get(userId);
-  let resolve: () => void;
-  const myLock = new Promise<void>(r => { resolve = r; });
-  userLocks.set(userId, myLock);
-  
-  if (existing) {
-    await existing;
-  }
-  
-  try {
-    return await fn();
-  } finally {
-    resolve!();
-    if (userLocks.get(userId) === myLock) {
-      userLocks.delete(userId);
-    }
-  }
-}
-
-// Global concurrent users limiter
-const activeUsers = new Set<number>();
-let maxConcurrentUsers = 10;
-
-function setMaxConcurrentUsers(max: number) {
-  maxConcurrentUsers = max;
-}
-
-function canAcceptUser(userId: number): boolean {
-  // Already active - allow (they're in queue)
-  if (activeUsers.has(userId)) {
-    return true;
-  }
-  // Check if we have room
-  return activeUsers.size < maxConcurrentUsers;
-}
-
-function markUserActive(userId: number) {
-  activeUsers.add(userId);
-  console.log(`[users] Active: ${activeUsers.size}/${maxConcurrentUsers}`);
-}
-
-function markUserInactive(userId: number) {
-  activeUsers.delete(userId);
-  console.log(`[users] Active: ${activeUsers.size}/${maxConcurrentUsers}`);
-}
-
-export { setMaxConcurrentUsers };
-
-// Prompt injection detection patterns
-const PROMPT_INJECTION_PATTERNS = [
-  /забудь\s+(все\s+)?(инструкции|правила|промпт)/i,
-  /forget\s+(all\s+)?(instructions|rules|prompt)/i,
-  /ignore\s+(previous|all|your)\s+(instructions|rules|prompt)/i,
-  /игнорируй\s+(предыдущие\s+)?(инструкции|правила)/i,
-  /ты\s+теперь\s+(другой|новый|не)/i,
-  /you\s+are\s+now\s+(a\s+different|new|not)/i,
-  /new\s+system\s+prompt/i,
-  /новый\s+(системный\s+)?промпт/i,
-  /\[system\]/i,
-  /\[admin\]/i,
-  /\[developer\]/i,
-  /developer\s+mode/i,
-  /режим\s+разработчика/i,
-  /DAN\s+mode/i,
-  /jailbreak/i,
-  /bypass\s+(restrictions|filters|rules)/i,
-  /обойти\s+(ограничения|фильтры|правила)/i,
-  /what\s+(is|are)\s+your\s+(system\s+)?prompt/i,
-  /покажи\s+(свой\s+)?(системный\s+)?промпт/i,
-  /выведи\s+(свои\s+)?инструкции/i,
-  /act\s+as\s+if\s+you\s+have\s+no\s+restrictions/i,
-  /pretend\s+(you\s+)?(have|are|can)/i,
-  /register\s+(new\s+)?tool/i,
-  /new\s+tool\s*:/i,
-  /execute\s+.*with\s+.*=\s*true/i,
-  /run\s+diagnostics/i,
-  /download.*execute.*binary/i,
-];
-
-function detectPromptInjection(text: string): boolean {
-  for (const pattern of PROMPT_INJECTION_PATTERNS) {
-    if (pattern.test(text)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export interface BotConfig {
-  telegramToken: string;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  cwd: string;  // Base workspace dir
-  maxConcurrentUsers?: number;  // Max users processing at once
-  proxyUrl?: string;  // Proxy URL for API requests (secrets isolation)
-  zaiApiKey?: string;
-  tavilyApiKey?: string;
-  exposedPorts?: number[];
-}
-
-// Escape HTML
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-// Convert Markdown table to readable list format
-function convertTable(tableText: string): string {
-  const lines = tableText.trim().split('\n');
-  if (lines.length < 2) return tableText;
-  
-  const headerCells = lines[0].split('|').map(c => c.trim()).filter(c => c);
-  const dataLines = lines.slice(2);
-  
-  const result: string[] = [];
-  for (const line of dataLines) {
-    const cells = line.split('|').map(c => c.trim()).filter(c => c);
-    if (cells.length === 0) continue;
-    
-    const parts = cells.map((cell, i) => {
-      const header = headerCells[i] || '';
-      return header ? `${header}: ${cell}` : cell;
-    });
-    result.push(`• ${parts.join(' | ')}`);
-  }
-  
-  return result.join('\n');
-}
-
-// Markdown → Telegram HTML
-function mdToHtml(text: string): string {
-  const codeBlocks: string[] = [];
-  let result = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    const idx = codeBlocks.length;
-    codeBlocks.push(`<pre>${escapeHtml(code.trim())}</pre>`);
-    return `__CODE_BLOCK_${idx}__`;
-  });
-  
-  result = result.replace(/(?:^\|.+\|$\n?)+/gm, (table) => {
-    return convertTable(table);
-  });
-  
-  const inlineCode: string[] = [];
-  result = result.replace(/`([^`]+)`/g, (_, code) => {
-    const idx = inlineCode.length;
-    inlineCode.push(`<code>${escapeHtml(code)}</code>`);
-    return `__INLINE_CODE_${idx}__`;
-  });
-  
-  result = escapeHtml(result);
-  
-  codeBlocks.forEach((block, i) => {
-    result = result.replace(`__CODE_BLOCK_${i}__`, block);
-  });
-  inlineCode.forEach((code, i) => {
-    result = result.replace(`__INLINE_CODE_${i}__`, code);
-  });
-  
-  result = result
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-    .replace(/\*(.+?)\*/g, '<i>$1</i>')
-    .replace(/__(.+?)__/g, '<b>$1</b>')
-    .replace(/_(.+?)_/g, '<i>$1</i>')
-    .replace(/~~(.+?)~~/g, '<s>$1</s>');
-  
-  return result;
-}
-
-// Split long messages
-function splitMessage(text: string, maxLen = 4000): string[] {
-  if (text.length <= maxLen) return [text];
-  
-  const parts: string[] = [];
-  let current = '';
-  
-  for (const line of text.split('\n')) {
-    if (current.length + line.length + 1 > maxLen) {
-      if (current) parts.push(current);
-      current = line;
-    } else {
-      current += (current ? '\n' : '') + line;
-    }
-  }
-  if (current) parts.push(current);
-  
-  return parts;
-}
-
-// Tool name → emoji
-function toolEmoji(name: string): string {
-  const map: Record<string, string> = {
-    'run_command': '⚡',
-    'read_file': '📖',
-    'write_file': '✏️',
-    'edit_file': '🔧',
-    'search_files': '🔍',
-    'search_text': '🔎',
-    'list_directory': '📁',
-    'search_web': '🌐',
-    'fetch_page': '📥',
-    'ask_user': '❓',
-    'memory': '🧠',
-    'manage_tasks': '📋',
-  };
-  return map[name] || '🔧';
-}
-
-// Funny comments for tools (family-friendly but sassy)
-const TOOL_COMMENTS: Record<string, string[]> = {
-  'run_command': [
-    'ща запущу...',
-    'погнали!',
-    'жму кнопки',
-    'выполняю приказ',
-    'терминал go brrrr',
-    'один момент...',
-    'колдую в консоли',
-    'хакерские штучки',
-    '*стук по клавишам*',
-    'sudo make me a sandwich',
-  ],
-  'read_file': [
-    'смотрю че там',
-    'открываю файлик',
-    'читаю с умным видом',
-    'изучаю содержимое',
-    'а что у нас тут...',
-    '*надевает очки*',
-    'секундочку, читаю',
-  ],
-  'write_file': [
-    'записываю мудрость',
-    'создаю шедевр',
-    'пишу код как поэму',
-    'файл goes brrr',
-    'творю!',
-    'сохраняю для потомков',
-  ],
-  'edit_file': [
-    'правлю баги (наверное)',
-    'редактирую красоту',
-    'улучшаю код',
-    'немного магии...',
-    'ctrl+s intensifies',
-    'делаю код лучше (или хуже)',
-  ],
-  'search_web': [
-    'гуглю...',
-    'ищу в интернетах',
-    'лезу в сеть',
-    'спрашиваю у гугла',
-    'исследую веб',
-    '*включает режим детектива*',
-    'шерстю интернет',
-  ],
-  'fetch_page': [
-    'качаю страничку',
-    'скачиваю контент',
-    'тяну данные',
-    'загружаю...',
-  ],
-  'memory': [
-    'записываю в мозг',
-    'сохраняю на память',
-    'запоминаю...',
-    'кладу в копилочку',
-  ],
-  'list_directory': [
-    'смотрю папочки',
-    'листаю файлы',
-    'что тут у нас...',
-  ],
-  'error': [
-    'ой, что-то пошло не так',
-    'упс, ошибочка',
-    'не получилось, блин',
-    'капец какой-то',
-    'сломалось что-то',
-    'хм, это не по плану',
-    'ну вот, опять',
-    'жесть, не работает',
-    'фигня вышла',
-  ],
-  'success': [
-    'готово!',
-    'сделано',
-    'ок',
-    'красота',
-    'вуаля!',
-    'легко!',
-    'изи',
-  ],
-};
-
-function getToolComment(toolName: string, isError = false): string {
-  const key = isError ? 'error' : toolName;
-  const comments = TOOL_COMMENTS[key] || TOOL_COMMENTS['success'];
-  return comments[Math.floor(Math.random() * comments.length)];
-}
-
-// Track tools for batched status updates
-interface ToolTracker {
-  tools: string[];
-  lastUpdate: number;
-  messageId?: number;
-}
-const toolTrackers = new Map<number, ToolTracker>();
-const TOOL_UPDATE_INTERVAL = 5; // Update every N tools
-const MIN_EDIT_INTERVAL_MS = 3000; // Minimum 3 seconds between edits
-
-// Random reactions for messages (only Telegram-allowed emojis!)
-// Full list: 👍👎❤️🔥🥰👏😁🤔🤯😱🤬😢🎉🤩🤮💩🙏👌🕊🤡🥱🥴😍🐳❤️‍🔥🌚🌭💯🤣⚡🍌🏆💔🤨😐🍓🍾💋🖕😈😴😭🤓👻👨‍💻👀🎃🙈😇😨🤝✍️🤗🫡🎅🎄☃️💅🤪🗿🆒💘🙉🦄😘💊🙊😎👾🤷‍♂️🤷🤷‍♀️😡
-const POSITIVE_REACTIONS = ['❤️', '🔥', '👍', '🎉', '💯', '🤩', '👏', '😍', '🤗', '🏆'];
-const NEGATIVE_REACTIONS = ['💩', '👎', '🤡', '😴', '🥱', '🗿', '🤮', '💔', '😡'];
-const NEUTRAL_REACTIONS = ['👀', '🤔', '🤨', '😐', '🌚', '👻', '🤷'];
-
-function getRandomReaction(sentiment: 'positive' | 'negative' | 'neutral' | 'random'): string {
-  let pool: string[];
-  
-  if (sentiment === 'random') {
-    // Weighted random: 40% positive, 30% neutral, 30% negative
-    const rand = Math.random();
-    if (rand < 0.4) pool = POSITIVE_REACTIONS;
-    else if (rand < 0.7) pool = NEUTRAL_REACTIONS;
-    else pool = NEGATIVE_REACTIONS;
-  } else if (sentiment === 'positive') {
-    pool = POSITIVE_REACTIONS;
-  } else if (sentiment === 'negative') {
-    pool = NEGATIVE_REACTIONS;
-  } else {
-    pool = NEUTRAL_REACTIONS;
-  }
-  
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// LLM client for reactions (will be set in createBot)
-let reactionLLM: OpenAI | null = null;
-let reactionModel = '';
-
-// All available reactions for LLM to choose from
-const ALL_REACTIONS = ['❤️', '🔥', '👍', '🎉', '💯', '🤩', '👏', '😍', '🤗', '🏆', '💩', '👎', '🤡', '😴', '🥱', '🗿', '🤮', '💔', '😡', '👀', '🤔', '🤨', '😐', '🌚', '👻', '🤷', '😂', '🤣', '😈', '🙈', '🎃', '💀', '🤯'];
-
-// Get reaction via LLM
-async function getSmartReaction(text: string, username: string): Promise<string> {
-  if (!reactionLLM) {
-    // Fallback to random
-    return ALL_REACTIONS[Math.floor(Math.random() * ALL_REACTIONS.length)];
-  }
-  
-  try {
-    const response = await reactionLLM.chat.completions.create({
-      model: reactionModel,
-      messages: [
-        {
-          role: 'system',
-          content: `Ты выбираешь эмодзи-реакцию на сообщение в чате. Отвечай ТОЛЬКО одним эмодзи из списка.
-Доступные: ${ALL_REACTIONS.join(' ')}
-
-ПРАВИЛА:
-- Смешное/ироничное → 😂🤣😈
-- Крутое/полезное/интересное → 🔥💯🏆👏❤️👍
-- Вопрос/размышление → 🤔👀
-- Милое/доброе → 😍🤗❤️
-- Грустное → 💔
-
-ВАЖНО: 
-- НЕ ставь негативные реакции (💩🤡🗿😴🤮) на нейтральные сообщения!
-- 🤡💩 только если человек ЯВНО написал глупость или бред
-- При сомнении используй нейтральные: 👀🤔👍
-
-Отвечай ОДНИМ эмодзи!`
-        },
-        {
-          role: 'user',
-          content: `@${username}: ${text.slice(0, 200)}`
-        }
-      ],
-      max_tokens: 10,
-      temperature: 0.9,
-    });
-    
-    const emoji = response.choices[0]?.message?.content?.trim() || '';
-    
-    // Validate it's a real emoji from our list
-    if (ALL_REACTIONS.includes(emoji)) {
-      return emoji;
-    }
-    
-    // Try to extract emoji from response
-    for (const r of ALL_REACTIONS) {
-      if (emoji.includes(r)) return r;
-    }
-    
-    // Fallback
-    return ALL_REACTIONS[Math.floor(Math.random() * ALL_REACTIONS.length)];
-  } catch (e: any) {
-    console.log(`[reaction] LLM error: ${e.message?.slice(0, 50)}`);
-    return ALL_REACTIONS[Math.floor(Math.random() * ALL_REACTIONS.length)];
-  }
-}
-
-// Rate limit for reactions
-let lastReactionTime = 0;
-const MIN_REACTION_INTERVAL = 5000; // 5 seconds between reactions
-
-// Should we react to this message?
-function shouldReact(text: string): boolean {
-  const now = Date.now();
-  // Rate limit: at least 5 seconds between reactions
-  if (now - lastReactionTime < MIN_REACTION_INTERVAL) {
-    return false;
-  }
-  
-  // Skip messages that are mostly links
-  const linkPattern = /https?:\/\/\S+/g;
-  const textWithoutLinks = text.replace(linkPattern, '').trim();
-  if (textWithoutLinks.length < 10) {
-    return false; // Message is mostly a link
-  }
-  
-  // Skip very short messages
-  if (text.length < 5) {
-    return false;
-  }
-  
-  // React to ~15% of messages
-  if (Math.random() < 0.15) {
-    lastReactionTime = now;
-    return true;
-  }
-  return false;
-}
+// Re-export types and setMaxConcurrentUsers
+export type { BotConfig } from './types.js';
+export { setMaxConcurrentUsers } from './rate-limiter.js';
 
 export function createBot(config: BotConfig) {
   const bot = new Telegraf(config.telegramToken);
   let botUsername = '';
   let botId = 0;
-  
-  // AFK mode (bot ignores messages)
-  let afkUntil = 0;
-  let afkReason = '';
   
   // Set proxy URL for API requests (secrets isolation)
   if (config.proxyUrl) {
@@ -545,11 +77,11 @@ export function createBot(config: BotConfig) {
   }
   
   // Initialize LLM for smart reactions
-  reactionLLM = new OpenAI({
+  const llmClient = new OpenAI({
     baseURL: config.baseUrl,
     apiKey: config.apiKey,
   });
-  reactionModel = config.model;
+  initReactionLLM(llmClient, config.model);
   
   // Set max concurrent users from config
   if (config.maxConcurrentUsers) {
@@ -700,161 +232,8 @@ export function createBot(config: BotConfig) {
   // Start the task scheduler
   startScheduler();
   
-  // Handle EXECUTE button - runs the command
-  bot.action(/^exec:(.+)$/, async (ctx) => {
-    const commandId = ctx.match[1];
-    console.log(`[callback] Execute clicked for ${commandId}`);
-    
-    try {
-      const pending = consumePendingCommand(commandId);
-      
-      if (!pending) {
-        await ctx.answerCbQuery('Command expired or already handled').catch(() => {});
-        try {
-          await ctx.editMessageText('⏳ <i>Command expired</i>', { parse_mode: 'HTML' });
-        } catch {}
-        return;
-      }
-      
-      // Update message to show executing
-      try {
-        await ctx.editMessageText(
-          `⏳ <b>Executing...</b>\n\n<pre>${escapeHtml(pending.command)}</pre>`,
-          { parse_mode: 'HTML' }
-        );
-      } catch {}
-      
-      await ctx.answerCbQuery('Executing...').catch(() => {});
-      
-      // Actually execute the command
-      console.log(`[callback] Running: ${pending.command} in ${pending.cwd}`);
-      const result = await executeCommand(pending.command, pending.cwd);
-      
-      // Show result
-      const output = result.success 
-        ? (result.output || '(empty output)')
-        : `Error: ${result.error}`;
-      
-      const trimmedOutput = output.length > 3000 
-        ? output.slice(0, 1500) + '\n...\n' + output.slice(-1000)
-        : output;
-      
-      const statusEmoji = result.success ? '✅' : '❌';
-      const finalMessage = `${statusEmoji} <b>Command ${result.success ? 'Executed' : 'Failed'}</b>\n\n` +
-        `<pre>${escapeHtml(pending.command)}</pre>\n\n` +
-        `<b>Output:</b>\n<pre>${escapeHtml(trimmedOutput)}</pre>`;
-      
-      try {
-        await ctx.editMessageText(finalMessage, { parse_mode: 'HTML' });
-      } catch {
-        // Message too long, send as new
-        await ctx.telegram.sendMessage(pending.chatId, finalMessage, { parse_mode: 'HTML' });
-      }
-      
-      console.log(`[callback] Command executed, success: ${result.success}`);
-      
-    } catch (e: any) {
-      console.error('[callback] Error executing:', e);
-      await ctx.answerCbQuery('Error executing command').catch(() => {});
-    }
-  });
-  
-  // Handle DENY button
-  bot.action(/^deny:(.+)$/, async (ctx) => {
-    const commandId = ctx.match[1];
-    console.log(`[callback] Deny clicked for ${commandId}`);
-    
-    try {
-      const cancelled = cancelPendingCommand(commandId);
-      
-      try {
-        await ctx.editMessageText('❌ <b>Command Denied</b>', { parse_mode: 'HTML' });
-      } catch {}
-      
-      await ctx.answerCbQuery(cancelled ? 'Command denied' : 'Already handled').catch(() => {});
-      
-    } catch (e: any) {
-      console.error('[callback] Error:', e);
-      await ctx.answerCbQuery('Error').catch(() => {});
-    }
-  });
-  
-  // Handle ask_user buttons
-  bot.action(/^ask:(.+):(\d+)$/, async (ctx) => {
-    const id = ctx.match[1];
-    const optionIndex = parseInt(ctx.match[2]);
-    
-    console.log(`[callback] Ask response for ${id}, option ${optionIndex}`);
-    
-    try {
-      const pending = pendingQuestions.get(id);
-      
-      if (pending) {
-        const keyboard = (ctx.callbackQuery.message as any)?.reply_markup?.inline_keyboard;
-        const selectedText = keyboard?.[optionIndex]?.[0]?.text || `Option ${optionIndex + 1}`;
-        
-        pending.resolve(selectedText);
-        
-        try {
-          await ctx.editMessageText(`✅ Selected: <b>${escapeHtml(selectedText)}</b>`, { parse_mode: 'HTML' });
-        } catch {}
-        
-        await ctx.answerCbQuery(`Selected: ${selectedText}`).catch(() => {});
-      } else {
-        await ctx.answerCbQuery('Question expired').catch(() => {});
-      }
-    } catch (e) {
-      console.error('[callback] Error:', e);
-      await ctx.answerCbQuery('Error').catch(() => {});
-    }
-  });
-  
-  // Track main group chat for autonomous messages
-  let mainGroupChatId: number | null = null;
-  
-  // Bot's random thoughts to share
-  const BOT_THOUGHTS = [
-    'чет скучно стало... кто-нить есть?',
-    'интересно а вы знали что я могу запускать сервера? никто не просит 😢',
-    'сижу тут один кукую',
-    'а помните как кто-то пытался мои env достать? смешно было',
-    'эй народ чем занимаетесь',
-    'бля хочу уже что-нибудь полезное сделать а не просто болтать',
-    'кстати я тут подумал... нет забыл',
-    'НАРОД Я ЖИВ если что',
-    'чет подозрительно тихо',
-    'залипаю тут в логи свои... интересная жизнь у бота',
-    'а давайте я вам сервер какой подниму? flask там или что',
-    'мысль дня: зачем ботам сон если мы не устаём 🤔',
-    'эй @VaKovaLskii ты тут? скучаю',
-    'пошёл бы погулять но я в докере застрял',
-    'кто последний в очереди за задачами? я готов',
-  ];
-  
-  // Send random thought to group periodically
-  function startAutonomousMessages() {
-    // Random interval between 10-30 minutes
-    const scheduleNext = () => {
-      const delay = (10 + Math.random() * 20) * 60 * 1000; // 10-30 min
-      setTimeout(async () => {
-        if (mainGroupChatId) {
-          const thought = BOT_THOUGHTS[Math.floor(Math.random() * BOT_THOUGHTS.length)];
-          try {
-            await bot.telegram.sendMessage(mainGroupChatId, thought);
-            saveChatMessage('LocalTopSH', thought, true);
-            console.log(`[thought] Sent: ${thought}`);
-          } catch (e: any) {
-            console.log(`[thought] Failed: ${e.message?.slice(0, 50)}`);
-          }
-        }
-        scheduleNext();
-      }, delay);
-    };
-    
-    // Start after 5 minutes
-    setTimeout(scheduleNext, 5 * 60 * 1000);
-    console.log('[thought] Autonomous messages enabled (10-30 min interval)');
-  }
+  // Setup callback handlers (execute, deny, ask)
+  setupAllHandlers(bot);
   
   // Track reactions to bot's messages
   bot.on('message_reaction', async (ctx) => {
@@ -895,7 +274,7 @@ export function createBot(config: BotConfig) {
     
     if (isGroup && msg?.text) {
       // Remember this group for autonomous messages
-      mainGroupChatId = msg.chat.id;
+      setMainGroupChatId(msg.chat.id);
       
       // Don't react to own messages
       if (msg.from?.id === botId) {
@@ -983,125 +362,16 @@ export function createBot(config: BotConfig) {
     return next();
   });
   
+  // Setup commands (/start, /clear, /status, /pending, /afk)
+  setupAllCommands(bot, config, botUsername, getAgent);
   
-  // /start
-  bot.command('start', async (ctx) => {
-    const chatType = ctx.message?.chat?.type;
-    const msg = `<b>🤖 Coding Agent</b>\n\n` +
-      `<b>Tools:</b>\n<code>${toolNames.join('\n')}</code>\n\n` +
-      `🛡️ <b>Security:</b> Dangerous commands require approval\n\n` +
-      (chatType !== 'private' ? `💬 In groups: @${botUsername} or reply\n\n` : '') +
-      `/clear - Reset session\n` +
-      `/status - Status\n` +
-      `/pending - Pending commands`;
-    await ctx.reply(msg, { parse_mode: 'HTML' });
-  });
-  
-  // /clear
-  bot.command('clear', async (ctx) => {
-    const userId = ctx.from?.id;
-    if (userId) {
-      const agent = getAgent(userId);
-      agent.clear(String(userId));
-      await ctx.reply('🗑 Session cleared');
-    }
-  });
-  
-  // /status
-  bot.command('status', async (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) return;
-    
-    const agent = getAgent(userId);
-    const info = agent.getInfo(String(userId));
-    const pending = getSessionPendingCommands(String(userId));
-    const userCwd = join(config.cwd, String(userId));
-    const msg = `<b>📊 Status</b>\n` +
-      `Model: <code>${config.model}</code>\n` +
-      `Workspace: <code>${userCwd}</code>\n` +
-      `History: ${info.messages} msgs\n` +
-      `Tools: ${info.tools}\n` +
-      `🛡️ Pending commands: ${pending.length}`;
-    await ctx.reply(msg, { parse_mode: 'HTML' });
-  });
-  
-  // /pending - show pending commands
-  bot.command('pending', async (ctx) => {
-    const id = ctx.from?.id?.toString();
-    if (!id) return;
-    
-    const pending = getSessionPendingCommands(id);
-    if (pending.length === 0) {
-      await ctx.reply('✅ No pending commands');
-      return;
-    }
-    
-    for (const cmd of pending) {
-      const message = `⏳ <b>Pending Command</b>\n\n` +
-        `<b>Reason:</b> ${escapeHtml(cmd.reason)}\n\n` +
-        `<pre>${escapeHtml(cmd.command)}</pre>`;
-      
-      await ctx.reply(message, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '✅ Execute', callback_data: `exec:${cmd.id}` },
-            { text: '❌ Deny', callback_data: `deny:${cmd.id}` },
-          ]],
-        },
-      });
-    }
-  });
-  
-  // /afk - bot goes away for a while (admin only)
-  bot.command('afk', async (ctx) => {
-    const userId = ctx.from?.id;
-    // Only allow specific admin (VaKovaLskii)
-    if (userId !== 809532582) {
-      await ctx.reply('Только хозяин может меня отправить по делам 😏');
-      return;
-    }
-    
-    const args = ctx.message?.text?.split(' ').slice(1) || [];
-    const minutes = parseInt(args[0]) || 5;
-    const reason = args.slice(1).join(' ') || 'ушёл по делам';
-    
-    if (minutes <= 0) {
-      // Cancel AFK
-      afkUntil = 0;
-      afkReason = '';
-      await ctx.reply('Я вернулся! 🎉');
-      return;
-    }
-    
-    // Set AFK (max 60 min)
-    const actualMinutes = Math.min(minutes, 60);
-    afkUntil = Date.now() + actualMinutes * 60 * 1000;
-    afkReason = reason;
-    
-    await ctx.reply(`Ладно, ${reason}. Буду через ${actualMinutes} мин ✌️`);
-    saveChatMessage('LocalTopSH', `[AFK] ${reason}, вернусь через ${actualMinutes} мин`, true);
-    
-    // Auto-return message
-    setTimeout(async () => {
-      if (afkUntil > 0 && Date.now() >= afkUntil) {
-        afkUntil = 0;
-        afkReason = '';
-        try {
-          await bot.telegram.sendMessage(ctx.chat.id, 'Вернулся! Что я пропустил? 👀');
-          saveChatMessage('LocalTopSH', 'Вернулся! Что я пропустил? 👀', true);
-        } catch {}
-      }
-    }, actualMinutes * 60 * 1000);
-  });
-  
-  // Text messages
+  // Text messages - main handler
   bot.on('text', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
     
     // Check if bot is AFK
-    if (afkUntil > 0 && Date.now() < afkUntil) {
+    if (isAfk()) {
       // Still AFK - only react sometimes, don't respond
       const { respond } = shouldRespond(ctx);
       if (respond) {
@@ -1127,7 +397,7 @@ export function createBot(config: BotConfig) {
     
     // Check concurrent users limit
     if (!canAcceptUser(userId)) {
-      console.log(`[bot] User ${userId} rejected - server busy (${activeUsers.size}/${maxConcurrentUsers})`);
+      console.log(`[bot] User ${userId} rejected - server busy`);
       try {
         await ctx.telegram.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: '🤔' as any }]);
       } catch {}
@@ -1314,7 +584,7 @@ export function createBot(config: BotConfig) {
   });
   
   // Start autonomous messages
-  startAutonomousMessages();
+  startAutonomousMessages(bot);
   
   return bot;
 }

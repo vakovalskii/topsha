@@ -34,3 +34,4 @@ workspace/
 # Agent data (persisted in volume)
 .valera/
 secrets/
+.cursor/

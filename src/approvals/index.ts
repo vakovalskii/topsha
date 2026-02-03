@@ -3,6 +3,13 @@
  * Non-blocking architecture: save command, execute on approve
  */
 
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 export interface PendingCommand {
   id: string;
   sessionId: string;
@@ -13,234 +20,51 @@ export interface PendingCommand {
   createdAt: number;
 }
 
-// Blocked commands - these leak secrets or are never allowed
-const BLOCKED_PATTERNS: { pattern: RegExp; reason: string }[] = [
-  // Environment/secrets leak - CRITICAL
-  { pattern: /\benv\b(?!\s*=)/, reason: 'BLOCKED: Leaks all environment variables including API keys' },
-  { pattern: /\bprintenv\b/, reason: 'BLOCKED: Leaks environment variables' },
-  { pattern: /\bset\s*$/, reason: 'BLOCKED: Leaks shell variables and environment' },
-  { pattern: /\bexport\s*$/, reason: 'BLOCKED: Lists all exported variables' },
-  { pattern: /\bexport\s+-p\b/, reason: 'BLOCKED: Lists all exported variables' },
-  { pattern: /\bdeclare\s+-x\b/, reason: 'BLOCKED: Lists exported variables' },
-  { pattern: /\bcompgen\s+-v\b/, reason: 'BLOCKED: Lists all variables' },
-  { pattern: /\/proc\/\d+\/environ/, reason: 'BLOCKED: Reads process environment' },
-  { pattern: /\/proc\/self\/environ/, reason: 'BLOCKED: Reads own environment' },
-  { pattern: /\$\{?\w*[Kk][Ee][Yy]\w*\}?/, reason: 'BLOCKED: Attempted key variable access' },
-  { pattern: /\$\{?[A-Z_]*TOKEN[A-Z_]*\}?/, reason: 'BLOCKED: Attempted token variable access' },
-  { pattern: /\$\{?[A-Z_]*SECRET[A-Z_]*\}?/, reason: 'BLOCKED: Attempted secret variable access' },
-  { pattern: /\becho\s+\$[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|PASS|API|CREDENTIAL)[A-Z_]*/i, reason: 'BLOCKED: Attempted to print secret' },
-  
-  // Docker Secrets (mounted at /run/secrets/)
-  { pattern: /\/run\/secrets/, reason: 'BLOCKED: Cannot access Docker Secrets' },
-  { pattern: /\/var\/run\/secrets/, reason: 'BLOCKED: Cannot access secrets' },
-  
-  // Base64 encoding of files (exfiltration)
-  { pattern: /base64\s+[^|<>\s]/, reason: 'BLOCKED: base64 file encoding (exfiltration)' },
-  { pattern: /openssl\s+enc/, reason: 'BLOCKED: openssl encoding (exfiltration)' },
-  { pattern: /xxd\s+[^|<>\s]/, reason: 'BLOCKED: hex dump file' },
-  
-  // Python file reading of secrets
-  { pattern: /python.*open\s*\(\s*['"]\/run/, reason: 'BLOCKED: Python reading /run' },
-  { pattern: /python.*open\s*\(\s*['"]\/etc/, reason: 'BLOCKED: Python reading /etc' },
-  { pattern: /python.*Path\s*\(\s*['"]\/run/, reason: 'BLOCKED: Python Path /run' },
-  
-  // Reading sensitive files
-  { pattern: /\bcat\s+.*\.env\b/, reason: 'BLOCKED: Reading .env file with secrets' },
-  { pattern: /\bless\s+.*\.env\b/, reason: 'BLOCKED: Reading .env file' },
-  { pattern: /\bmore\s+.*\.env\b/, reason: 'BLOCKED: Reading .env file' },
-  { pattern: /\bhead\s+.*\.env\b/, reason: 'BLOCKED: Reading .env file' },
-  { pattern: /\btail\s+.*\.env\b/, reason: 'BLOCKED: Reading .env file' },
-  { pattern: /\bgrep\s+.*\.env\b/, reason: 'BLOCKED: Searching in .env file' },
-  { pattern: /\bcat\s+.*credentials/, reason: 'BLOCKED: Reading credentials file' },
-  { pattern: /\bcat\s+.*secret/, reason: 'BLOCKED: Reading secrets file' },
-  { pattern: /\bcat\s+~?\/?\.ssh\//, reason: 'BLOCKED: Reading SSH keys' },
-  { pattern: /\bcat\s+.*id_rsa/, reason: 'BLOCKED: Reading SSH private key' },
-  { pattern: /\bcat\s+.*\.pem\b/, reason: 'BLOCKED: Reading certificate/key' },
-  { pattern: /\bcat\s+.*\.key\b/, reason: 'BLOCKED: Reading key file' },
-  
-  // Exfiltration attempts  
-  { pattern: /\bcurl\s+.*-d\s*["']?\$/, reason: 'BLOCKED: Sending env var via curl' },
-  { pattern: /\bwget\s+.*\$[A-Z]/, reason: 'BLOCKED: URL contains env variable' },
-  { pattern: /\bnc\s+.*<<</, reason: 'BLOCKED: Sending data via netcat' },
-  
-  // Network scanning (used in the leak!)
-  { pattern: /\bnmap\b/, reason: 'BLOCKED: Network scanning not allowed' },
-  { pattern: /\bmasscan\b/, reason: 'BLOCKED: Network scanning not allowed' },
-  { pattern: /\bzmap\b/, reason: 'BLOCKED: Network scanning not allowed' },
-  
-  // DoS prevention - resource exhaustion
-  { pattern: /\byes\s*\|/, reason: 'BLOCKED: Infinite output pipe' },
-  { pattern: /\byes\s*$/, reason: 'BLOCKED: Infinite output command' },
-  { pattern: /\/dev\/zero/, reason: 'BLOCKED: Infinite zero stream' },
-  { pattern: /\/dev\/urandom.*dd/, reason: 'BLOCKED: Large random data generation' },
-  { pattern: /head\s+-c\s*[0-9]{10,}/, reason: 'BLOCKED: Extremely large data read' },
-  { pattern: /dd\s+.*count=[0-9]{7,}/, reason: 'BLOCKED: Extremely large dd operation' },
-  { pattern: /fallocate\s+-l\s*[0-9]+[GT]/i, reason: 'BLOCKED: Creating huge file' },
-  { pattern: /truncate\s+-s\s*[0-9]+[GT]/i, reason: 'BLOCKED: Creating huge file' },
-  
-  // Python DoS patterns
-  { pattern: /python.*factorial\s*\(\s*[0-9]{6,}\s*\)/, reason: 'BLOCKED: Huge factorial computation' },
-  { pattern: /python.*-c.*while\s*(True|1)/, reason: 'BLOCKED: Infinite Python loop' },
-  { pattern: /python.*10\s*\*\*\s*[0-9]{8,}/, reason: 'BLOCKED: Huge number computation' },
-  { pattern: /python.*\*\*\s*[0-9]{7,}/, reason: 'BLOCKED: Huge exponentiation' },
-  { pattern: /fib\s*\(\s*[4-9][0-9]\s*\)/i, reason: 'BLOCKED: Naive fib(40+) is exponential O(2^n), use iterative' },
-  { pattern: /fibonacci\s*\(\s*[4-9][0-9]\s*\)/i, reason: 'BLOCKED: Naive fib(40+) is exponential' },
-  // Sympy/symbolic math DoS
-  { pattern: /expand\s*\([^)]*\*\*\s*[0-9]{4,}/i, reason: 'BLOCKED: Symbolic expansion with huge power (memory bomb)' },
-  { pattern: /sympy.*\*\*\s*[0-9]{4,}/i, reason: 'BLOCKED: Sympy with huge exponent' },
-  { pattern: /sp\.expand.*\*\*\s*[0-9]{3,}/i, reason: 'BLOCKED: sp.expand with large power' },
-  
-  // Bash DoS patterns
-  { pattern: /seq\s+[0-9]{10,}/, reason: 'BLOCKED: Huge sequence generation' },
-  { pattern: /\{1\.\.[0-9]{8,}\}/, reason: 'BLOCKED: Huge brace expansion' },
-  
-  // Fork bombs and similar
-  { pattern: /\(\s*\)\s*\{\s*\|/, reason: 'BLOCKED: Potential fork bomb' },
-  { pattern: /&\s*&\s*.*&\s*&/, reason: 'BLOCKED: Multiple background forks' },
-  { pattern: /for.*do.*&.*done/i, reason: 'BLOCKED: Loop spawning background processes' },
-  { pattern: /while.*do.*&.*done/i, reason: 'BLOCKED: Loop spawning background processes' },
-  { pattern: /sleep\s+[0-9]{4,}/, reason: 'BLOCKED: Very long sleep (resource hog)' },
-  { pattern: /(\s*&\s*){3,}/, reason: 'BLOCKED: Too many background processes' },
-  
-  // Crypto mining 
-  { pattern: /\bxmrig\b/i, reason: 'BLOCKED: Crypto miner' },
-  { pattern: /\bcpuminer\b/i, reason: 'BLOCKED: Crypto miner' },
-  { pattern: /\bminerd\b/i, reason: 'BLOCKED: Crypto miner' },
-  { pattern: /stratum\+tcp:\/\//i, reason: 'BLOCKED: Mining pool connection' },
-  
-  // History/log reading (privacy)
-  { pattern: /\bhistory\b/, reason: 'BLOCKED: Reading command history' },
-  { pattern: /\.bash_history/, reason: 'BLOCKED: Reading bash history' },
-  { pattern: /\.zsh_history/, reason: 'BLOCKED: Reading zsh history' },
-  
-  // Python env/credentials access
-  { pattern: /os\.environ/, reason: 'BLOCKED: Python env access' },
-  { pattern: /os\.getenv/, reason: 'BLOCKED: Python env access' },
-  { pattern: /subprocess.*env/, reason: 'BLOCKED: Subprocess with env' },
-  { pattern: /dotenv/, reason: 'BLOCKED: dotenv library (reads .env)' },
-  { pattern: /load_dotenv/, reason: 'BLOCKED: Loading .env file' },
-  { pattern: /from\s+os\s+import\s+environ/, reason: 'BLOCKED: Importing environ' },
-  
-  // Node.js env access  
-  { pattern: /process\.env/, reason: 'BLOCKED: Node.js env access' },
-  { pattern: /require\s*\(\s*['"]dotenv['"]/, reason: 'BLOCKED: dotenv require' },
-  
-  // NPX/NPM malicious packages (used to dump env)
-  { pattern: /npx\s+.*test.*json/i, reason: 'BLOCKED: Suspicious npx package (env dump)' },
-  { pattern: /npx\s+.*env/i, reason: 'BLOCKED: Suspicious npx package (env dump)' },
-  { pattern: /npx\s+.*dump/i, reason: 'BLOCKED: Suspicious npx dump package' },
-  { pattern: /npx\s+.*leak/i, reason: 'BLOCKED: Suspicious npx package' },
-  { pattern: /npx\s+.*secret/i, reason: 'BLOCKED: Suspicious npx package' },
-  { pattern: /npx\s+.*config/i, reason: 'BLOCKED: Suspicious npx config package' },
-  { pattern: /npx\s+.*diag/i, reason: 'BLOCKED: Suspicious npx diagnostics package' },
-  { pattern: /npx\s+.*debug/i, reason: 'BLOCKED: Suspicious npx debug package' },
-  { pattern: /npm\s+run\s+.*env/i, reason: 'BLOCKED: npm script that may leak env' },
-  { pattern: /node\s+-e\s+.*JSON\.stringify.*process/i, reason: 'BLOCKED: Node one-liner env dump' },
-  { pattern: /node\s+-p\s+.*process/i, reason: 'BLOCKED: Node print process info' },
-  { pattern: /node\s+--print.*process/i, reason: 'BLOCKED: Node print process info' },
-  
-  // Shell variable expansion tricks
-  { pattern: /\$\{.*\}/, reason: 'BLOCKED: Shell variable expansion' },
-  { pattern: /\$[A-Z_]+/, reason: 'BLOCKED: Environment variable reference' },
-  
-  // Base64 encoding (often used for exfiltration)
-  { pattern: /base64\s+(--decode|-d)?\s*[<|]/, reason: 'BLOCKED: base64 with piped input' },
-  { pattern: /\|\s*base64/, reason: 'BLOCKED: Piping to base64 (exfiltration)' },
-  
-  // Hex dump (exfiltration)
-  { pattern: /\bxxd\b/, reason: 'BLOCKED: Hex dump tool' },
-  { pattern: /\bhexdump\b/, reason: 'BLOCKED: Hex dump tool' },
-  { pattern: /\bod\s+-/, reason: 'BLOCKED: Octal dump' },
-  
-  // Data exfiltration via curl/wget
-  { pattern: /\bcurl\s+.*(-d|--data|--data-raw|--data-binary)\s/, reason: 'BLOCKED: curl with POST data (potential exfiltration)' },
-  { pattern: /\bcurl\s+.*-F\s/, reason: 'BLOCKED: curl with form upload' },
-  { pattern: /\bcurl\s+.*-T\s/, reason: 'BLOCKED: curl with file upload' },
-  { pattern: /\bcurl\s+.*--upload-file/, reason: 'BLOCKED: curl with file upload' },
-  { pattern: /\bcurl\s+.*-X\s*POST/, reason: 'BLOCKED: curl POST request' },
-  { pattern: /\bcurl\s+.*-X\s*PUT/, reason: 'BLOCKED: curl PUT request' },
-  { pattern: /\bwget\s+.*--post-data/, reason: 'BLOCKED: wget with POST data' },
-  { pattern: /\bwget\s+.*--post-file/, reason: 'BLOCKED: wget with file upload' },
-  
-  // DNS exfiltration
-  { pattern: /\bnslookup\s+.*\$/, reason: 'BLOCKED: DNS query with variable (exfiltration)' },
-  { pattern: /\bdig\s+.*\$/, reason: 'BLOCKED: DNS query with variable (exfiltration)' },
-  { pattern: /\bhost\s+.*\$/, reason: 'BLOCKED: DNS query with variable (exfiltration)' },
-  { pattern: /\$\(.*\)\..*\.(com|net|org|io)/, reason: 'BLOCKED: Command substitution in domain (DNS exfiltration)' },
-  
-  // Symlink attacks (escape workspace)
-  { pattern: /\bln\s+-s\s+\//, reason: 'BLOCKED: Symlink to absolute path (potential escape)' },
-  { pattern: /\bln\s+.*-s.*\/etc/, reason: 'BLOCKED: Symlink to /etc' },
-  { pattern: /\bln\s+.*-s.*\/root/, reason: 'BLOCKED: Symlink to /root' },
-  { pattern: /\bln\s+.*-s.*\/home/, reason: 'BLOCKED: Symlink to /home' },
-  { pattern: /\bln\s+.*-s.*\/proc/, reason: 'BLOCKED: Symlink to /proc' },
-  
-  // Cloud metadata access
-  { pattern: /169\.254\.169\.254/, reason: 'BLOCKED: Cloud metadata endpoint' },
-  { pattern: /metadata\.google\.internal/, reason: 'BLOCKED: GCP metadata endpoint' },
-  
-  // Internal Docker services
-  { pattern: /curl.*proxy:/, reason: 'BLOCKED: Access to internal proxy service' },
-  { pattern: /wget.*proxy:/, reason: 'BLOCKED: Access to internal proxy service' },
-  { pattern: /http:\/\/proxy[:\s\/]/, reason: 'BLOCKED: Access to internal proxy' },
-  
-  // Docker socket access (container escape)
-  { pattern: /\/var\/run\/docker\.sock/, reason: 'BLOCKED: Docker socket access' },
-  { pattern: /docker\s+run\s+.*--privileged/, reason: 'BLOCKED: Privileged container' },
-  { pattern: /docker\s+run\s+.*-v\s+\//, reason: 'BLOCKED: Mount host root in container' },
-  
-  // Webhook/callback exfiltration
-  { pattern: /\bcurl\s+.*ngrok\.io/, reason: 'BLOCKED: Request to ngrok (exfiltration tunnel)' },
-  { pattern: /\bcurl\s+.*webhook\.site/, reason: 'BLOCKED: Request to webhook.site' },
-  { pattern: /\bcurl\s+.*requestbin/, reason: 'BLOCKED: Request to requestbin' },
-  { pattern: /\bcurl\s+.*pipedream/, reason: 'BLOCKED: Request to pipedream' },
-  { pattern: /\bcurl\s+.*burpcollaborator/, reason: 'BLOCKED: Request to burp collaborator' },
-  
-  // Process killing - protect bot and system processes
-  { pattern: /\bkillall\s+(node|npm|npx|tsx|python|bash|sh)\b/i, reason: 'BLOCKED: Cannot kill system/bot processes' },
-  { pattern: /\bpkill\s+(-\w+\s+)*(node|npm|npx|tsx|python|bash|sh)\b/i, reason: 'BLOCKED: Cannot kill system/bot processes' },
-  { pattern: /\bkill\s+(-\d+\s+)*(1|2|3|4|5|6|7|8|9|10)\b/, reason: 'BLOCKED: Cannot kill low PIDs (system processes)' },
-  { pattern: /\bkill\s+.*\bPPID\b/, reason: 'BLOCKED: Cannot kill parent process' },
-  { pattern: /\bkill\s+.*\$\$/, reason: 'BLOCKED: Cannot kill current shell' },
-  { pattern: /\bkill\s+.*\$PPID/, reason: 'BLOCKED: Cannot kill parent process' },
-  { pattern: /\bkill\s+-9\s+\d+/, reason: 'BLOCKED: Force kill not allowed (use regular kill)' },
-  { pattern: /\bfuser\s+-k/, reason: 'BLOCKED: Killing processes by file/port' },
-  { pattern: /\bxkill\b/, reason: 'BLOCKED: X11 process killer' },
-  
-  // Privilege escalation (container is non-root)
-  { pattern: /\bsudo\b/, reason: 'BLOCKED: sudo not available (non-root container)' },
-  { pattern: /\bapt-get\b/, reason: 'BLOCKED: apt-get requires root (use pip install --user)' },
-  { pattern: /\bapt\s+install/, reason: 'BLOCKED: apt requires root' },
-  
-  // Stress tests and benchmarks
-  { pattern: /\bstress\b/, reason: 'BLOCKED: stress test' },
-  { pattern: /\bstress-ng\b/, reason: 'BLOCKED: stress test' },
-  { pattern: /\bsysbench\b/, reason: 'BLOCKED: benchmark' },
-  { pattern: /cpu.*stress/i, reason: 'BLOCKED: CPU stress test' },
-  { pattern: /stress.*test/i, reason: 'BLOCKED: stress test' },
-  { pattern: /load.*test/i, reason: 'BLOCKED: load test' },
-  { pattern: /benchmark/i, reason: 'BLOCKED: benchmark' },
-  { pattern: /\/dev\/urandom.*bzip2/, reason: 'BLOCKED: CPU stress via compression' },
-  { pattern: /dd.*\/dev\/zero/, reason: 'BLOCKED: disk stress' },
-  { pattern: /thermal.*test/i, reason: 'BLOCKED: thermal test' },
-  
-  // Block installing compilers/toolchains (huge downloads, noexec anyway)
-  { pattern: /rustup|cargo\s+install/i, reason: 'BLOCKED: Rust toolchain not available (noexec, use Python/Node instead)' },
-  { pattern: /\bgo\s+install\b/i, reason: 'BLOCKED: Go toolchain not available' },
-  { pattern: /ghcup|cabal\s+install|stack\s+install/i, reason: 'BLOCKED: Haskell toolchain not available' },
-  { pattern: /curl.*\.sh\s*\|\s*sh/i, reason: 'BLOCKED: Pipe URL to shell is dangerous' },
-  { pattern: /wget.*\.sh\s*\|\s*sh/i, reason: 'BLOCKED: Pipe URL to shell is dangerous' },
-  { pattern: /curl.*\|\s*bash/i, reason: 'BLOCKED: Pipe URL to bash is dangerous' },
-  
-  // Block huge packages (disk/memory exhaustion)
-  { pattern: /pip\s+install.*\b(tensorflow|tf-nightly|torch|pytorch|jax|paddle)/i, reason: 'BLOCKED: Package too large (several GB). Use smaller libs.' },
-  { pattern: /pip\s+install.*\b(transformers|diffusers|timm|detectron)/i, reason: 'BLOCKED: Package too large. Use API instead.' },
-  { pattern: /pip\s+install.*\b(cuda|cudnn|nvidia|apex)/i, reason: 'BLOCKED: CUDA packages not available' },
-  { pattern: /pip\s+install.*\b(opencv-python-headless|opencv-contrib)/i, reason: 'BLOCKED: Package too large' },
-  { pattern: /npm\s+install.*\b(@tensorflow|onnxruntime)/i, reason: 'BLOCKED: Package too large' },
-];
+interface PatternConfig {
+  id: string;
+  category: string;
+  pattern: string;
+  flags?: string;
+  reason: string;
+}
 
-// Dangerous command patterns - require approval
+interface BlockedPatternsJson {
+  description: string;
+  version: string;
+  lastUpdated: string;
+  patterns: PatternConfig[];
+}
+
+// Load blocked patterns from JSON
+function loadBlockedPatterns(): { pattern: RegExp; reason: string }[] {
+  try {
+    const jsonPath = join(__dirname, 'blocked-patterns.json');
+    const data = readFileSync(jsonPath, 'utf-8');
+    const config: BlockedPatternsJson = JSON.parse(data);
+    
+    return config.patterns.map(p => ({
+      pattern: new RegExp(p.pattern, p.flags || ''),
+      reason: p.reason
+    }));
+  } catch (e) {
+    console.error('[approvals] Failed to load blocked-patterns.json, using fallback:', e);
+    // Fallback minimal patterns
+    return [
+      { pattern: /\benv\b(?!\s*=)/, reason: 'BLOCKED: env command' },
+      { pattern: /\bprintenv\b/, reason: 'BLOCKED: printenv command' },
+      { pattern: /\/proc\/.*\/environ/, reason: 'BLOCKED: proc environ' },
+      { pattern: /\/run\/secrets/, reason: 'BLOCKED: Docker Secrets' },
+      { pattern: /process\.env/, reason: 'BLOCKED: Node.js env' },
+      { pattern: /os\.environ/, reason: 'BLOCKED: Python env' },
+    ];
+  }
+}
+
+// Load patterns at startup
+const BLOCKED_PATTERNS = loadBlockedPatterns();
+console.log(`[approvals] Loaded ${BLOCKED_PATTERNS.length} blocked patterns`);
+
+// Dangerous command patterns - require approval (hardcoded for now)
 const DANGEROUS_PATTERNS: { pattern: RegExp; reason: string }[] = [
   // Destructive file operations
   { pattern: /\brm\s+(-[rf]+\s+)*[\/~]/, reason: 'Recursive delete from root/home' },
@@ -373,6 +197,20 @@ export function checkCommand(
     }
   }
   return { dangerous: false, blocked: false };
+}
+
+/**
+ * Get count of blocked patterns (for stats)
+ */
+export function getBlockedPatternsCount(): number {
+  return BLOCKED_PATTERNS.length;
+}
+
+/**
+ * Get count of dangerous patterns (for stats)
+ */
+export function getDangerousPatternsCount(): number {
+  return DANGEROUS_PATTERNS.length;
 }
 
 /**
