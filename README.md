@@ -2,11 +2,17 @@
 
 **Production-ready ReAct agent for Telegram group chats.**
 
-> 🔥 **Battle-tested in production!**
+> 🔥 **Battle-tested by 1450+ hackers for 7 hours straight!**
 > 
-> Running 24/7 in [**@neuraldeepchat**](https://t.me/neuraldeepchat) — **1450+ members**, **1500+ messages** processed.
+> Live in [**@neuraldeepchat**](https://t.me/neuraldeepchat) — community stress-tested with **1500+ attack attempts**:
+> - API key extraction (env, /proc, base64 exfil)
+> - RAM/CPU exhaustion (huge factorials, infinite loops)
+> - Process killing, fork bombs
+> - Container escape attempts
 > 
-> Join to try it live!
+> **Result: 0 secrets leaked, 0 downtime.**
+> 
+> Join and try to break it!
 
 ## Features
 
