@@ -1,88 +1,79 @@
 # LocalTopSH 🐧
 
-**Production-ready ReAct agent for Telegram group chats.**
+**AI Agent with full system access, sandboxed per user.**
 
-> 🔥 **Battle-tested by 1450+ hackers for 7 hours straight!**
+> 🔥 **Battle-tested by 1500+ hackers!**
 > 
 > Live in [**@neuraldeepchat**](https://t.me/neuraldeepchat) — community stress-tested with **1500+ attack attempts**:
-> - API key extraction (env, /proc, base64 exfil)
-> - RAM/CPU exhaustion (huge factorials, infinite loops)
-> - Process killing, fork bombs
+> - Token extraction (env, /proc, base64 exfil, HTTP servers)
+> - RAM/CPU exhaustion (zip bombs, infinite loops, fork bombs)
 > - Container escape attempts
 > 
 > **Result: 0 secrets leaked, 0 downtime.**
-> 
-> Join and try to break it!
-
-## Features
-
-- ReAct agent with 13 tools (shell, files, web search, memes, scheduler)
-- Per-user isolated workspaces in Docker
-- Secrets isolation via Docker Secrets + internal Proxy
-- Smart reactions on messages (LLM-powered)
-- Autonomous "thoughts" in chat
-- Anti-abuse: rate limits, DoS prevention, command blocking
-- 42 security tests passing
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Telegram  │────▶│   Gateway   │────▶│    Proxy    │
-│   1450+     │     │  (bot+agent)│     │  (secrets)  │
-│   users     │◀────│             │◀────│             │
-└─────────────┘     └─────────────┘     └─────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │  /workspace │
-                    │  per-user   │
-                    │  isolation  │
-                    └─────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         HOST (Docker)                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐     │
+│  │   Telegram  │      │   Gateway   │      │    Proxy    │     │
+│  │   Users     │◄────►│  (bot+LLM)  │─────►│  (secrets)  │     │
+│  └─────────────┘      └──────┬──────┘      └─────────────┘     │
+│                              │                                  │
+│              Docker API      │                                  │
+│                              ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              Dynamic Sandbox Containers                  │   │
+│  ├─────────────┬─────────────┬─────────────┬───────────────┤   │
+│  │ sandbox_    │ sandbox_    │ sandbox_    │               │   │
+│  │ user_123    │ user_456    │ user_789    │     ...       │   │
+│  │ ports:5000  │ ports:5010  │ ports:5020  │               │   │
+│  │ ┌─────────┐ │ ┌─────────┐ │ ┌─────────┐ │               │   │
+│  │ │workspace│ │ │workspace│ │ │workspace│ │               │   │
+│  │ │ /123    │ │ │ /456    │ │ │ /789    │ │               │   │
+│  │ └─────────┘ │ └─────────┘ │ └─────────┘ │               │   │
+│  └─────────────┴─────────────┴─────────────┴───────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Secrets never exposed to agent!** Agent only sees `PROXY_URL`.
+**Key Security:**
+- Each user runs in **isolated Docker container**
+- Container sees only **own workspace** (not others)
+- **No access** to `/run/secrets`, `/app`, host filesystem
+- Limits: 512MB RAM, 50% CPU, 100 processes
+- Auto-cleanup: 60 min inactive → container removed
+- Secrets isolated via internal Proxy (agent never sees API keys)
+
+## Features
+
+- **ReAct Agent** with 13 tools (shell, files, web search, scheduler)
+- **Per-user Docker sandbox** with resource limits
+- **Secrets isolation** via Docker Secrets + internal Proxy
+- **Smart reactions** on messages (LLM-powered)
+- **Autonomous "thoughts"** in chat (LLM-generated from context)
+- **Anti-abuse**: 247 regex patterns, rate limits, DoS prevention
 
 ## Tools (13)
 
 | Tool | Description |
 |------|-------------|
-| `run_command` | Execute shell commands |
+| `run_command` | Execute shell (runs in sandbox container) |
 | `read_file` | Read file content |
 | `write_file` | Create/overwrite file |
 | `edit_file` | Edit file (find & replace) |
 | `delete_file` | Delete file |
 | `search_files` | Find files by glob |
 | `search_text` | Search text in files |
-| `list_directory` | List directory contents |
+| `list_directory` | List directory |
 | `search_web` | Web search (Z.AI) |
 | `fetch_page` | Fetch URL content |
 | `send_file` | Send file to chat |
-| `get_meme` | Random meme/dog/cat |
-| `schedule_task` | Delayed messages/commands |
-
-## Configuration
-
-All bot settings in one file: `src/config.ts`
-
-| Section | What it controls |
-|---------|------------------|
-| `rateLimit` | Telegram API intervals, retries |
-| `timeouts` | Tool execution, commands, API calls |
-| `agent` | Max iterations, history, blocked limit |
-| `bot` | Response delays, typing interval |
-| `reactions` | Emoji chance, categories, weights |
-| `thoughts` | Autonomous messages interval |
-| `messages` | Max lengths, trimming |
-| `storage` | Chat history limit, memory size |
-| `admin` | Bot owner ID |
-
-```typescript
-// Example: change reaction chance from 15% to 25%
-CONFIG.reactions.randomChance = 0.25;
-
-// Example: increase tool timeout to 3 minutes
-CONFIG.timeouts.toolExecution = 180_000;
-```
+| `send_dm` | Send private message |
+| `memory` | Persistent notes across sessions |
 
 ## Quick Start
 
@@ -93,45 +84,57 @@ echo "your-telegram-token" > secrets/telegram_token.txt
 echo "http://your-llm:8000/v1" > secrets/base_url.txt
 echo "your-llm-key" > secrets/api_key.txt
 echo "your-zai-key" > secrets/zai_api_key.txt
-chmod 644 secrets/*.txt
 
 # 2. Start
 docker compose up -d
+
+# 3. Check
+docker compose logs -f
 ```
+
+## Configuration
+
+All settings in `src/config.ts`:
+
+| Section | What it controls |
+|---------|------------------|
+| `rateLimit` | Telegram API limits |
+| `timeouts` | Tool execution, API calls |
+| `agent` | Max iterations, history |
+| `sandbox` | Container limits, TTL |
+| `reactions` | Emoji chance, weights |
+| `thoughts` | Autonomous messages interval |
 
 ## Security
 
-**241 regex patterns** protecting against attacks:
-- 185 BLOCKED (never allowed)
-- 56 DANGEROUS (require approval in DM)
+**247 regex patterns** protecting against attacks:
+- 191 BLOCKED (never allowed)
+- 56 DANGEROUS (require approval)
 
 Categories:
-- Secrets: env, printenv, /proc/environ, /run/secrets, process.env, os.environ
-- Exfiltration: base64, xxd, hexdump, curl POST, DNS tunneling
-- DoS: fork bombs, stress tests, huge factorials, infinite loops
-- Packages: tensorflow, pytorch (multi-GB), compiler toolchains
-- Network: cloud metadata, internal services, port scanning
-- Files: .env, credentials, SSH keys, symlink attacks
+- Secrets: env, /proc/environ, /run/secrets, process.env
+- Exfiltration: base64 encode, curl POST, HTTP servers reading secrets
+- DoS: fork bombs, zip bombs, huge allocations
+- Escape: other workspaces, host filesystem, Docker socket
 
 Architecture:
-- Docker Secrets for all API keys
-- Internal proxy isolates secrets from agent
-- Per-user workspace isolation
-- Rate limiting (Telegram API)
+- **Docker sandbox** per user (dynamic containers)
+- **Docker Secrets** for all API keys  
+- **Internal proxy** isolates secrets from agent
+- **Per-user workspace** isolation (only own dir mounted)
 
 ## Structure
 
 ```
-├── docker-compose.yml    # Gateway + Proxy containers
+├── docker-compose.yml    # Gateway + Proxy
 ├── secrets/              # API keys (gitignored)
 ├── proxy/                # Internal API proxy
-│   └── index.js
 └── src/
-    ├── config.ts         # All settings in one place
+    ├── config.ts         # All settings
     ├── agent/            # ReAct loop
-    ├── bot/              # Telegram bot (10 modules)
-    ├── approvals/        # Command security + 241 patterns
-    └── tools/            # 13 tools
+    ├── bot/              # Telegram bot
+    ├── approvals/        # Security patterns
+    └── tools/            # 13 tools + Docker sandbox
 ```
 
 ## License

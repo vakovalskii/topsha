@@ -27,6 +27,18 @@ export const CONFIG = {
     grepTimeout: 30_000,          // 30s - grep command timeout
   },
 
+  // ============== SANDBOX (Docker) ==============
+  sandbox: {
+    commandTimeout: 120,          // sec - max time for single command
+    backgroundTimeout: 3600,      // sec - max time for background process (1 hour)
+    userInactivityTTL: 60,        // min - kill processes after user inactive
+    memoryMB: 512,                // MB - memory limit per command
+    maxFileSizeMB: 100,           // MB - max file size (prevent zip bombs)
+    maxFiles: 64,                 // max open file descriptors
+    maxProcs: 32,                 // max processes per user
+    cleanupInterval: 5,           // min - how often to check for inactive users
+  },
+
   // ============== AGENT BEHAVIOR ==============
   agent: {
     maxIterations: 15,            // max think-act cycles per request
@@ -40,6 +52,15 @@ export const CONFIG = {
     thinkDelayMax: 2000,          // ms - max delay before responding
     typingInterval: 5000,         // ms - send typing action interval
     trollDelay: 2000,             // ms - delay before troll message
+    
+    // Игнорирование (более человечное поведение)
+    ignoreChance: 0.05,           // 5% шанс проигнорировать сообщение в группе
+    ignorePrivateChance: 0,       // 0% в личке (всегда отвечаем)
+    
+    // Отложенный ответ
+    delayedResponseChance: 0.20,  // 20% шанс ответить с задержкой
+    delayedResponseMin: 3000,     // ms - минимальная задержка
+    delayedResponseMax: 15000,    // ms - максимальная задержка (до 15 сек)
   },
 
   // ============== STATUS UPDATES ==============

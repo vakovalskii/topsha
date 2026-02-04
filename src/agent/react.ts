@@ -99,9 +99,9 @@ export class ReActAgent {
     const userId = parseInt(userIdStr) || 0;
     
     // Calculate user's port range (each user gets 10 ports)
-    // Base port 4000, user index = hash of ID mod 10 (max 10 concurrent users)
+    // Base port 5000 (sandbox containers), user index = hash of ID mod 10
     const userIndex = userId % 10;
-    const basePort = 4000 + (userIndex * 10);
+    const basePort = 5000 + (userIndex * 10);
     const userPorts = `${basePort}-${basePort + 9}`;
     
     // Replace placeholders
@@ -270,6 +270,7 @@ ${chatHistory}
           const result = await tools.execute(name, args, {
             cwd: this.config.cwd,
             sessionId,
+            userId: parseInt(sessionId) || 0,
             chatId,
             chatType,
             zaiApiKey: this.config.zaiApiKey,

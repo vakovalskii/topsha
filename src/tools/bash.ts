@@ -8,9 +8,22 @@
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { CONFIG } from '../config.js';
+import { 
+  executeInSandbox as dockerExecute, 
+  isDockerAvailable,
+  markUserActive as markSandboxActive,
+} from './dockerSandbox.js';
+import { registerProcess, markUserActive } from './processManager.js';
 
 const execAsync = promisify(exec);
 import { checkCommand, storePendingCommand } from '../approvals/index.js';
+
+// Docker sandbox status (set after async check)
+let dockerAvailable = false;
+isDockerAvailable().then(available => {
+  dockerAvailable = available;
+  console.log(`[sandbox] Docker available: ${available}`);
+});
 
 // Patterns to sanitize from output
 const SECRET_PATTERNS = [
@@ -285,21 +298,59 @@ export async function execute(
 }
 
 /**
+ * Extract userId from workspace path
+ */
+function extractUserId(cwd: string): string | null {
+  const match = cwd.match(/\/workspace\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+/**
  * Execute a command (used for both regular and approved commands)
+ * Uses Docker sandbox for isolation when available
  */
 export async function executeCommand(
   command: string,
   cwd: string
 ): Promise<{ success: boolean; output?: string; error?: string }> {
+  const userId = extractUserId(cwd);
+  const useSandbox = dockerAvailable && userId;
+  
   // Check if command should run in background
   const isBackground = /&\s*$/.test(command.trim()) || command.includes('nohup');
   
-  // Execute background commands with spawn (non-blocking)
-  if (isBackground) {
-    try {
-      // Remove trailing & for spawn
-      const cleanCmd = command.trim().replace(/&\s*$/, '').trim();
+  // === DOCKER SANDBOX EXECUTION ===
+  if (useSandbox) {
+    console.log(`[sandbox] Executing in Docker for user ${userId}`);
+    
+    // Mark user active
+    markSandboxActive(userId);
+    
+    const result = await dockerExecute(userId, command, cwd);
+    
+    if (result.sandboxed) {
+      // Sanitize output even from sandbox (defense in depth)
+      const sanitized = sanitizeOutput(result.output || '');
       
+      // Truncate if needed
+      const maxOutput = 4000;
+      const trimmed = sanitized.length > maxOutput 
+        ? sanitized.slice(0, 2000) + '\n\n...(truncated)...\n\n' + sanitized.slice(-1500)
+        : sanitized;
+      
+      return result.success 
+        ? { success: true, output: trimmed || '(empty output)' }
+        : { success: false, error: trimmed };
+    }
+    // If sandbox failed to run, fall through to regular execution
+    console.log('[sandbox] Docker sandbox failed, falling back to regular execution');
+  }
+  
+  // === BACKGROUND COMMANDS (no sandbox fallback) ===
+  if (isBackground) {
+    const cleanCmd = command.trim().replace(/&\s*$/, '').trim();
+    
+    try {
       const child = spawn('sh', ['-c', cleanCmd], {
         cwd,
         detached: true,
@@ -313,9 +364,15 @@ export async function executeCommand(
       
       try {
         process.kill(child.pid!, 0); // Check if alive
+        
+        // Register process for tracking and cleanup
+        if (userId) {
+          registerProcess(userId, child.pid!, cleanCmd);
+        }
+        
         return { 
           success: true, 
-          output: `Started in background (PID: ${child.pid}). Check logs with: tail <logfile>` 
+          output: `Started in background (PID: ${child.pid}). Max lifetime: ${CONFIG.sandbox.backgroundTimeout / 60} min. Check logs with: tail <logfile>` 
         };
       } catch {
         // Process died immediately - likely an error
@@ -332,7 +389,8 @@ export async function executeCommand(
     }
   }
   
-  // Execute regular commands with async exec (non-blocking!)
+  // === REGULAR EXECUTION (no sandbox) ===
+  // This path is used when sandbox is not available or for system commands
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd,

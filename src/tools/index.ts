@@ -16,6 +16,7 @@
  * - manage_tasks     : Task management (todo list)
  * - ask_user         : Ask user with button options
  * - send_file        : Send file from workspace to chat
+ * - send_dm          : Send direct message to user's private chat
  */
 
 import * as bash from './bash.js';
@@ -25,6 +26,7 @@ import * as tasks from './tasks.js';
 import * as ask from './ask.js';
 import * as memory from './memory.js';
 import * as sendFile from './sendFile.js';
+import * as sendDm from './sendDm.js';
 import * as message from './message.js';
 import * as meme from './meme.js';
 import * as scheduler from './scheduler.js';
@@ -34,6 +36,7 @@ import { CONFIG } from '../config.js';
 export { setApprovalCallback } from './bash.js';
 export { setAskCallback } from './ask.js';
 export { setSendFileCallback } from './sendFile.js';
+export { setSendDmCallback } from './sendDm.js';
 export { setDeleteMessageCallback, setEditMessageCallback, recordBotMessage } from './message.js';
 export { setSendMessageCallback, setExecuteCommandCallback, startScheduler } from './scheduler.js';
 export { getMemoryForPrompt, logGlobal, getGlobalLog, shouldTroll, getTrollMessage, saveChatMessage, getChatHistory } from './memory.js';
@@ -56,6 +59,7 @@ export const definitions = [
   ask.definition,
   memory.definition,
   sendFile.definition,
+  sendDm.definition,
   message.definition,
   meme.definition,
   scheduler.definition,
@@ -75,6 +79,7 @@ export interface ToolResult {
 export interface ToolContext {
   cwd: string;
   sessionId?: string;
+  userId?: number;
   chatId?: number;
   chatType?: 'private' | 'group' | 'supergroup' | 'channel';
   zaiApiKey?: string;
@@ -204,6 +209,10 @@ async function executeInternal(
     
     case 'send_file':
       result = await sendFile.execute(args as any, ctx.cwd, ctx.chatId || 0);
+      break;
+    
+    case 'send_dm':
+      result = await sendDm.execute(args as any, ctx.userId || 0);
       break;
     
     case 'manage_message':

@@ -13,17 +13,20 @@ import {
   setApprovalCallback, 
   setAskCallback, 
   setSendFileCallback, 
+  setSendDmCallback,
   setDeleteMessageCallback, 
   setEditMessageCallback, 
   recordBotMessage, 
   setSendMessageCallback, 
-  startScheduler, 
+  startScheduler,
   logGlobal, 
   shouldTroll, 
   getTrollMessage, 
   saveChatMessage, 
   setProxyUrl 
 } from '../tools/index.js';
+import { startProcessManager, markUserActive as markProcessUserActive } from '../tools/processManager.js';
+import { startSandboxManager, shutdownSandbox } from '../tools/dockerSandbox.js';
 
 // Import bot modules
 import type { BotConfig, PendingQuestion } from './types.js';
@@ -51,7 +54,8 @@ import {
 } from './tools-ui.js';
 import { 
   setMainGroupChatId, 
-  startAutonomousMessages 
+  startAutonomousMessages,
+  setOpenAIClient,
 } from './thoughts.js';
 import { 
   setupAllHandlers, 
@@ -77,12 +81,13 @@ export function createBot(config: BotConfig) {
     setProxyUrl(config.proxyUrl);
   }
   
-  // Initialize LLM for smart reactions
+  // Initialize LLM for smart reactions and autonomous thoughts
   const llmClient = new OpenAI({
     baseURL: config.baseUrl,
     apiKey: config.apiKey,
   });
   initReactionLLM(llmClient, config.model);
+  setOpenAIClient(llmClient);
   
   // Set max concurrent users from config
   if (config.maxConcurrentUsers) {
@@ -203,6 +208,19 @@ export function createBot(config: BotConfig) {
     });
   });
   
+  // Set up send DM callback (for sending private messages)
+  setSendDmCallback(async (userId, message) => {
+    try {
+      await safeSend(userId, async () => {
+        await bot.telegram.sendMessage(userId, message, { parse_mode: 'HTML' });
+      });
+      return true;
+    } catch (e: any) {
+      console.log(`[send_dm] Failed to send to ${userId}: ${e.message?.slice(0, 50)}`);
+      return false;
+    }
+  });
+  
   // Set up delete message callback
   setDeleteMessageCallback(async (chatId, messageId) => {
     try {
@@ -232,6 +250,14 @@ export function createBot(config: BotConfig) {
   
   // Start the task scheduler
   startScheduler();
+  
+  // Start the process manager (cleanup inactive users)
+  startProcessManager();
+  
+  // Start Docker sandbox manager (async, fire-and-forget)
+  startSandboxManager().catch(err => {
+    console.error('[sandbox] Failed to start:', err.message);
+  });
   
   // Setup callback handlers (execute, deny, ask)
   setupAllHandlers(bot);
@@ -388,10 +414,32 @@ export function createBot(config: BotConfig) {
     const { respond, text, isRandom } = shouldRespond(ctx);
     if (!respond || !text) return;
     
+    const chatType = ctx.chat?.type;
+    const isGroup = chatType === 'group' || chatType === 'supergroup';
+    const isPrivate = chatType === 'private';
+    
+    // Шанс игнорирования (более человечное поведение)
+    const ignoreChance = isPrivate ? CONFIG.bot.ignorePrivateChance : CONFIG.bot.ignoreChance;
+    if (!isRandom && Math.random() < ignoreChance) {
+      console.log(`[bot] Ignoring message from ${userId} (random ignore, ${(ignoreChance * 100).toFixed(0)}% chance)`);
+      // Иногда ставим реакцию "видел, но игнорю"
+      if (Math.random() < 0.5) {
+        try {
+          const ignoreEmojis = ['😴', '🙈', '💤', '🤷'] as const;
+          const emoji = ignoreEmojis[Math.floor(Math.random() * ignoreEmojis.length)];
+          await ctx.telegram.setMessageReaction(ctx.chat.id, ctx.message.message_id, [{ type: 'emoji', emoji: emoji as any }]);
+        } catch {}
+      }
+      return;
+    }
+    
     // If random trigger, add context hint for the agent
+    const username = ctx.from?.username || ctx.from?.first_name || String(userId);
+    const userPrefix = `[От: @${username} (${userId})]`;
+    
     const messageForAgent = isRandom 
-      ? `[Ты случайно увидел это сообщение и решил прокомментировать. НЕ отвечай как на запрос - просто вклинься в разговор, пошути или прокомментируй]\n\n${text}`
-      : text;
+      ? `${userPrefix}\n[Ты случайно увидел это сообщение и решил прокомментировать. НЕ отвечай как на запрос - просто вклинься в разговор, пошути или прокомментируй]\n\n${text}`
+      : `${userPrefix}\n${text}`;
     
     const sessionId = userId.toString();
     const messageId = ctx.message.message_id;
@@ -412,15 +460,13 @@ export function createBot(config: BotConfig) {
     // Save chat ID for approval requests
     sessionChats.set(sessionId, chatId);
     
-    const username = ctx.from?.username || ctx.from?.first_name || String(userId);
     console.log(`\n[IN] @${username} (${userId}):\n${text}\n`);
     
     // Log to global activity log
     logGlobal(userId, 'message', text.slice(0, CONFIG.messages.logSliceLength));
     
     // Save to chat history (only for private chats, groups are saved in reaction handler)
-    const chatType = ctx.chat?.type;
-    if (chatType === 'private') {
+    if (isPrivate) {
       saveChatMessage(username, text, false, chatId);
     }
     
@@ -437,13 +483,29 @@ export function createBot(config: BotConfig) {
       return;
     }
     
+    // Случайная задержка перед ответом (человечное поведение)
+    if (Math.random() < CONFIG.bot.delayedResponseChance) {
+      const delay = CONFIG.bot.delayedResponseMin + 
+        Math.random() * (CONFIG.bot.delayedResponseMax - CONFIG.bot.delayedResponseMin);
+      console.log(`[bot] Delayed response for ${userId}, waiting ${Math.round(delay / 1000)}s...`);
+      
+      // Пока ждем, иногда показываем typing
+      const delayTyping = setInterval(() => {
+        ctx.sendChatAction('typing').catch(() => {});
+      }, 3000);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      clearInterval(delayTyping);
+    }
+    
     // React with emoji to show we're working on it
     try {
       await ctx.telegram.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: '👀' }]);
     } catch {}
     
-    // Mark user as active
+    // Mark user as active (rate limiter + process manager)
     markUserActive(userId);
+    markProcessUserActive(userId.toString());
     
     // Use lock to prevent concurrent requests from same user
     await withUserLock(userId, async () => {

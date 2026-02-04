@@ -40,7 +40,7 @@ services:
       - MCP_PORT=3100
       - MCP_URL=http://localhost:3100
       - WORKSPACE=/workspace
-      - EXPOSED_PORTS=4000-4999
+      - EXPOSED_PORTS=5000-5099
       - MAX_CONCURRENT_USERS=10
       - AGENT_CWD=/workspace
     secrets:
@@ -48,8 +48,9 @@ services:
         mode: 0444
     volumes:
       - ./workspace:/workspace
-    ports:
-      - "4000-4099:4000-4099"
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker API for sandboxing
+    # Ports 5000-5099 are used by sandbox containers (created dynamically)
+    # No ports needed on gateway itself
     networks:
       - agent-net
     
@@ -68,7 +69,7 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
-          pids: 100
+          pids: 300
         reservations:
           cpus: '0.5'
           memory: 512M

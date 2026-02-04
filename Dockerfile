@@ -1,6 +1,7 @@
+# LocalTopSH Gateway Container
 FROM node:22-bookworm
 
-# Install additional tools (grep, sed already in base image)
+# Install tools for agent and users
 RUN apt-get update && apt-get install -y \
     git curl wget gawk \
     python3 python3-pip python3-venv \
@@ -12,11 +13,7 @@ RUN apt-get update && apt-get install -y \
     && rm -f /usr/lib/python*/EXTERNALLY-MANAGED \
     && ln -sf /usr/bin/fdfind /usr/bin/fd
 
-# Create non-root user for security
-RUN groupadd -r agent && useradd -r -g agent -d /home/agent -s /bin/bash agent \
-    && mkdir -p /home/agent && chown -R agent:agent /home/agent
-
-# Pre-install common Python packages for web servers
+# Pre-install common Python packages
 RUN pip install --break-system-packages flask fastapi uvicorn requests
 
 WORKDIR /app
@@ -28,12 +25,8 @@ COPY tsconfig.json ./
 COPY src ./src
 
 # Create workspace with proper permissions
-RUN mkdir -p /workspace && chown -R agent:agent /workspace
-RUN chown -R agent:agent /app
+RUN mkdir -p /workspace && chmod 777 /workspace
 
 ENV AGENT_CWD=/workspace
-
-# Switch to non-root user
-USER agent
 
 CMD ["npx", "tsx", "src/index.ts"]

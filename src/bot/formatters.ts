@@ -55,6 +55,14 @@ export function mdToHtml(text: string): string {
     return `__INLINE_CODE_${idx}__`;
   });
   
+  // Protect @mentions from formatting (before escapeHtml)
+  const mentions: string[] = [];
+  result = result.replace(/@[\w_]+/g, (mention) => {
+    const idx = mentions.length;
+    mentions.push(mention);
+    return `\x00MENTION${idx}\x00`;  // Use null bytes as delimiters (won't match markdown patterns)
+  });
+  
   result = escapeHtml(result);
   
   codeBlocks.forEach((block, i) => {
@@ -70,6 +78,11 @@ export function mdToHtml(text: string): string {
     .replace(/__(.+?)__/g, '<b>$1</b>')
     .replace(/_(.+?)_/g, '<i>$1</i>')
     .replace(/~~(.+?)~~/g, '<s>$1</s>');
+  
+  // Restore @mentions after formatting
+  mentions.forEach((mention, i) => {
+    result = result.replace(`\x00MENTION${i}\x00`, mention);
+  });
   
   return result;
 }
