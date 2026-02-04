@@ -15,33 +15,33 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                              HOST (Docker)                                │
+│                              HOST (Docker)                               │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ┌──────────────┐     ┌──────────────────────┐     ┌──────────────────┐ │
-│  │   Telegram   │     │       Gateway        │     │      Proxy       │ │
-│  │    Users     │◄───►│   Bot + ReAct Agent  │────►│   /run/secrets/  │ │
-│  └──────────────┘     │                      │     │  • api_key       │ │
-│                       │  /workspace/_shared/ │     │  • telegram_token│ │
-│                       │  • chats/*.md        │     │  • base_url      │ │
-│                       │  • GLOBAL_LOG.md     │     └──────────────────┘ │
-│                       └──────────┬───────────┘              │           │
-│                                  │                          │           │
-│                    Docker API    │              LLM API ◄───┘           │
-│                                  ▼                                      │
-│  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                   Dynamic Sandbox Containers                        │ │
-│  │                   (python:3.11-alpine per user)                     │ │
-│  ├─────────────────┬─────────────────┬─────────────────┬──────────────┤ │
-│  │ sandbox_123     │ sandbox_456     │ sandbox_789     │              │ │
-│  │ ports:5000-5009 │ ports:5010-5019 │ ports:5020-5029 │    ...       │ │
-│  │                 │                 │                 │              │ │
-│  │ /workspace/123/ │ /workspace/456/ │ /workspace/789/ │              │ │
-│  │ • MEMORY.md     │ • MEMORY.md     │ • MEMORY.md     │              │ │
-│  │ • SESSION.json  │ • SESSION.json  │ • SESSION.json  │              │ │
-│  │ • gdrive_token  │ • user files    │ • user files    │              │ │
-│  │ • user files    │                 │                 │              │ │
-│  └─────────────────┴─────────────────┴─────────────────┴──────────────┘ │
+│  ┌──────────────┐     ┌──────────────────────┐     ┌──────────────────┐  │
+│  │   Telegram   │     │       Gateway        │     │      Proxy       │  │
+│  │    Users     │◄───►│   Bot + ReAct Agent  │────►│   /run/secrets/  │  │
+│  └──────────────┘     │                      │     │  • api_key       │  │
+│                       │  /workspace/_shared/ │     │  • telegram_token│  │
+│                       │  • chats/*.md        │     │  • base_url      │  │
+│                       │  • GLOBAL_LOG.md     │     └──────────────────┘  │
+│                       └──────────┬───────────┘              │            │
+│                                  │                          │            │
+│                    Docker API    │              LLM API ◄───┘            │
+│                                  ▼                                       │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │                   Dynamic Sandbox Containers                       │  │
+│  │                   (python:3.11-alpine per user)                    │  │
+│  ├─────────────────┬─────────────────┬─────────────────┬──────────────┤  │
+│  │ sandbox_123     │ sandbox_456     │ sandbox_789     │              │  │
+│  │ ports:5000-5009 │ ports:5010-5019 │ ports:5020-5029 │    ...       │  │
+│  │                 │                 │                 │              │  │
+│  │ /workspace/123/ │ /workspace/456/ │ /workspace/789/ │              │  │
+│  │ • MEMORY.md     │ • MEMORY.md     │ • MEMORY.md     │              │  │
+│  │ • SESSION.json  │ • SESSION.json  │ • SESSION.json  │              │  │
+│  │ • gdrive_token  │ • user files    │ • user files    │              │  │
+│  │ • user files    │                 │                 │              │  │
+│  └─────────────────┴─────────────────┴─────────────────┴──────────────┘  │
 │                                                                          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
