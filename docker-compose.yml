@@ -40,6 +40,7 @@ services:
       - API_PORT=4000
       - BOT_URL=http://bot:4001
       - USERBOT_URL=http://userbot:8080
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     secrets:
       - gdrive_client_id
       - gdrive_client_secret

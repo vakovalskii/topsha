@@ -2,15 +2,23 @@
 
 import logging
 import sys
+import os
 from datetime import datetime
 
 
-# Configure logging
+# Configure logging level from env
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+if LOG_LEVEL not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+    LOG_LEVEL = "INFO"
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL),
     format='[%(name)s] %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)]
 )
+
+# Log startup level
+print(f"[logger] Log level: {LOG_LEVEL}")
 
 
 def get_logger(name: str) -> logging.Logger:

@@ -12,6 +12,8 @@ from models import ToolResult, ToolContext
 
 async def tool_send_file(args: dict, ctx: ToolContext) -> ToolResult:
     """Send file from workspace to chat"""
+    import asyncio
+    
     path = args.get("path", "")
     caption = args.get("caption", "")
     
@@ -22,7 +24,13 @@ async def tool_send_file(args: dict, ctx: ToolContext) -> ToolResult:
     if not path.startswith("/"):
         path = os.path.join(ctx.cwd, path)
     
-    # Check file exists
+    # Check file exists (with retry for race condition)
+    for attempt in range(3):
+        if os.path.exists(path):
+            break
+        tool_logger.info(f"File not ready yet, waiting... ({attempt+1}/3)")
+        await asyncio.sleep(1)
+    
     if not os.path.exists(path):
         return ToolResult(False, error=f"File not found: {path}")
     

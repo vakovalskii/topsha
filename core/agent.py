@@ -100,24 +100,79 @@ async def call_llm(messages: list, tools: list) -> dict:
     if not CONFIG.proxy_url:
         return {"error": "No proxy configured"}
     
+    request_body = {
+        "model": CONFIG.model,
+        "messages": messages,
+        "tools": tools,
+        "tool_choice": "auto",
+        "max_tokens": 8000,
+    }
+    
+    # Log raw request (truncate long content)
+    agent_logger.debug("=" * 60)
+    agent_logger.debug("RAW REQUEST:")
+    for i, msg in enumerate(messages):
+        role = msg.get("role", "?")
+        content = msg.get("content", "")
+        tool_calls = msg.get("tool_calls", [])
+        
+        if role == "system":
+            agent_logger.debug(f"  [{i}] system: ({len(content)} chars)")
+        elif role == "user":
+            agent_logger.debug(f"  [{i}] user: {content[:200]}{'...' if len(content) > 200 else ''}")
+        elif role == "assistant":
+            if tool_calls:
+                for tc in tool_calls:
+                    fn = tc.get("function", {})
+                    agent_logger.debug(f"  [{i}] assistant tool_call: {fn.get('name')}({fn.get('arguments', '')[:100]})")
+            else:
+                agent_logger.debug(f"  [{i}] assistant: {content[:200] if content else '(no content)'}{'...' if content and len(content) > 200 else ''}")
+        elif role == "tool":
+            agent_logger.debug(f"  [{i}] tool[{msg.get('tool_call_id', '?')[:8]}]: {content[:100]}{'...' if len(content) > 100 else ''}")
+    agent_logger.debug(f"  tools: {len(tools)} definitions")
+    agent_logger.debug("=" * 60)
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{CONFIG.proxy_url}/v1/chat/completions",
-                json={
-                    "model": CONFIG.model,
-                    "messages": messages,
-                    "tools": tools,
-                    "tool_choice": "auto",
-                    "max_tokens": 8000,
-                },
+                json=request_body,
                 timeout=aiohttp.ClientTimeout(total=120)
             ) as resp:
                 if resp.status != 200:
                     error = await resp.text()
+                    agent_logger.error(f"RAW RESPONSE ERROR: {resp.status} - {error[:500]}")
                     return {"error": f"LLM error {resp.status}: {error[:200]}"}
-                return await resp.json()
+                
+                result = await resp.json()
+                
+                # Log raw response
+                agent_logger.debug("RAW RESPONSE:")
+                agent_logger.debug(f"  id: {result.get('id', '?')}")
+                agent_logger.debug(f"  model: {result.get('model', '?')}")
+                
+                choices = result.get("choices", [])
+                for i, choice in enumerate(choices):
+                    msg = choice.get("message", {})
+                    finish = choice.get("finish_reason", "?")
+                    content = msg.get("content", "")
+                    tool_calls = msg.get("tool_calls", [])
+                    
+                    agent_logger.debug(f"  choice[{i}] finish_reason: {finish}")
+                    if content:
+                        agent_logger.debug(f"  choice[{i}] content: {content[:300]}{'...' if len(content) > 300 else ''}")
+                    if tool_calls:
+                        for tc in tool_calls:
+                            fn = tc.get("function", {})
+                            agent_logger.debug(f"  choice[{i}] tool_call: {fn.get('name')}({fn.get('arguments', '')[:150]})")
+                
+                usage = result.get("usage", {})
+                agent_logger.debug(f"  usage: prompt={usage.get('prompt_tokens', '?')}, completion={usage.get('completion_tokens', '?')}, total={usage.get('total_tokens', '?')}")
+                agent_logger.debug("=" * 60)
+                
+                return result
     except Exception as e:
+        agent_logger.error(f"RAW RESPONSE EXCEPTION: {e}")
         return {"error": str(e)}
 
 
@@ -195,19 +250,32 @@ async def run_agent(
         
         # Check for tool calls
         tool_calls = msg.get("tool_calls", [])
+        content = msg.get("content", "")
+        
+        # Log what we got
+        agent_logger.info(f"[iter {iteration}] finish_reason={finish_reason}, tool_calls={len(tool_calls)}, content={len(content) if content else 0} chars")
+        if content:
+            agent_logger.info(f"[iter {iteration}] CONTENT: {content[:200]}{'...' if len(content) > 200 else ''}")
         
         if tool_calls:
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 name = fn.get("name", "")
+                raw_args = fn.get("arguments", "{}")
+                
+                agent_logger.info(f"[iter {iteration}] TOOL CALL: {name}")
+                agent_logger.debug(f"[iter {iteration}] TOOL ARGS RAW: {raw_args}")
                 
                 try:
-                    args = json.loads(fn.get("arguments", "{}"))
-                except:
+                    args = json.loads(raw_args)
+                except Exception as e:
+                    agent_logger.error(f"[iter {iteration}] TOOL ARGS PARSE ERROR: {e}")
                     args = {}
                 
                 # Execute tool
                 tool_result = await execute_tool(name, args, tool_ctx)
+                
+                agent_logger.info(f"[iter {iteration}] TOOL RESULT: success={tool_result.success}, output={len(tool_result.output or '')} chars, error={tool_result.error or 'none'}")
                 
                 # Track blocked commands
                 if not tool_result.success and "BLOCKED" in (tool_result.error or ""):
@@ -233,12 +301,34 @@ async def run_agent(
         
         else:
             # No tool calls - this is the final response
-            final_response = msg.get("content", "")
+            agent_logger.info(f"[iter {iteration}] FINAL RESPONSE (no tool calls)")
+            final_response = content
+            
+            # Debug: if content empty but tokens used, log raw message
+            if not content:
+                agent_logger.warning(f"[iter {iteration}] Empty content! Raw message: {json.dumps(msg, ensure_ascii=False)[:500]}")
             break
         
         if finish_reason == "stop" and not tool_calls:
             final_response = msg.get("content", "")
             break
+    
+    # Fallback: if no response but had successful tool calls, generate summary
+    if not final_response and iteration > 1:
+        # Look for successful tool results in messages
+        tool_outputs = []
+        for m in messages:
+            if m.get("role") == "tool":
+                content = m.get("content", "")
+                if content and not content.startswith("Error:"):
+                    # Extract first line or result
+                    first_line = content.split('\n')[0][:100]
+                    if first_line and first_line != "(empty)":
+                        tool_outputs.append(first_line)
+        
+        if tool_outputs:
+            final_response = f"Готово! {tool_outputs[-1]}" if len(tool_outputs) == 1 else "✅ Готово"
+            agent_logger.info(f"[fallback] Generated response from tool outputs")
     
     # Save to history
     session.history.append({"role": "user", "content": message})
