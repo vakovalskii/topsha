@@ -125,8 +125,10 @@ def clean_response(text: str) -> str:
     """Remove LLM artifacts from response"""
     if not text:
         return ""
-    # Remove XML-like tags
-    text = re.sub(r'</?(final|response|answer|output|reply|thinking)>', '', text)
+    # Remove thinking blocks with content
+    text = re.sub(r'<thinking>[\s\S]*?</thinking>', '', text, flags=re.IGNORECASE)
+    # Remove standalone XML-like tags
+    text = re.sub(r'</?(final|response|answer|output|reply|thinking)>', '', text, flags=re.IGNORECASE)
     return text.strip()
 
 

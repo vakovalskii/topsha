@@ -809,7 +809,10 @@ async def main():
             
             # Send response - clean model artifacts
             if response:
-                response = re.sub(r'</?(final|response|answer|output|reply)>', '', response).strip()
+                # Remove thinking blocks with content
+                response = re.sub(r'<thinking>[\s\S]*?</thinking>', '', response, flags=re.IGNORECASE)
+                # Remove standalone tags
+                response = re.sub(r'</?(final|response|answer|output|reply|thinking)>', '', response, flags=re.IGNORECASE).strip()
             # Don't send if response is just command results
             if response and not response.startswith('✅') and not response.startswith('❌'):
                 # Random reply (50% in DM, always in groups)

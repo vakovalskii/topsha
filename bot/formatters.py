@@ -101,6 +101,10 @@ def split_message(text: str, max_len: int = 4000) -> list[str]:
 
 
 def clean_model_artifacts(text: str) -> str:
-    """Remove LLM artifacts like </final> tags"""
+    """Remove LLM artifacts like </final> tags and <thinking> blocks"""
     import re
-    return re.sub(r'</?(final|response|answer|output|reply)>', '', text).strip()
+    # Remove thinking blocks with content
+    text = re.sub(r'<thinking>[\s\S]*?</thinking>', '', text, flags=re.IGNORECASE)
+    # Remove standalone tags
+    text = re.sub(r'</?(final|response|answer|output|reply|thinking)>', '', text, flags=re.IGNORECASE)
+    return text.strip()
