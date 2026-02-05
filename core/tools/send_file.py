@@ -23,12 +23,17 @@ async def tool_send_file(args: dict, ctx: ToolContext) -> ToolResult:
     # Normalize path
     path = normalize_path(path, ctx.cwd)
     
-    # Check file exists (with retry for race condition)
-    for attempt in range(3):
+    # Check file exists (with retry for race condition / sync delay)
+    for attempt in range(5):
         if os.path.exists(path):
-            break
-        tool_logger.info(f"File not ready yet, waiting... ({attempt+1}/3)")
-        await asyncio.sleep(1)
+            # Also check file size > 0 (not still being written)
+            try:
+                if os.path.getsize(path) > 0:
+                    break
+            except:
+                pass
+        tool_logger.info(f"File not ready yet, waiting... ({attempt+1}/5)")
+        await asyncio.sleep(2)
     
     if not os.path.exists(path):
         return ToolResult(False, error=f"File not found: {path}")
