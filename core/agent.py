@@ -306,11 +306,58 @@ async def run_agent(
                 except json.JSONDecodeError:
                     pass
         
-        # If still no content and no tool_calls, use reasoning as content
+        # If still no content and no tool_calls, check if reasoning indicates intent
         if not content and not tool_calls and reasoning:
-            agent_logger.info(f"[iter {iteration}] Using reasoning as content (no tool call found)")
-            content = reasoning
-            msg["content"] = content
+            reasoning_lower = reasoning.lower()
+            
+            # Check if model wants to continue but didn't emit tool call
+            intent_patterns = [
+                ("let's list", "list_directory", {"path": "."}),
+                ("list dir", "list_directory", {"path": "."}),
+                ("let's check", "list_directory", {"path": "."}),
+                ("let's send", "send_file", None),  # Need to find file path
+                ("send the file", "send_file", None),
+                ("let's read", "read_file", None),
+                ("let's search", "search_web", None),
+                ("let's fetch", "fetch_page", None),
+            ]
+            
+            for pattern, tool_name, default_args in intent_patterns:
+                if pattern in reasoning_lower:
+                    agent_logger.info(f"[iter {iteration}] Detected intent '{pattern}' → {tool_name}")
+                    
+                    # Try to extract path/query from reasoning
+                    args = default_args or {}
+                    
+                    # Extract file path if mentioned
+                    import re
+                    path_match = re.search(r'(/workspace/[^\s"\']+\.(?:pptx|pdf|txt|py|json|md|html))', reasoning)
+                    if path_match:
+                        args["path"] = path_match.group(1)
+                    elif tool_name == "send_file":
+                        # Try to find any .pptx file mention
+                        pptx_match = re.search(r'([A-Za-z0-9_-]+\.pptx)', reasoning)
+                        if pptx_match:
+                            args["path"] = pptx_match.group(1)
+                    
+                    if tool_name and (args or tool_name == "list_directory"):
+                        tool_calls = [{
+                            "id": f"intent_{iteration}",
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(args)
+                            }
+                        }]
+                        msg["tool_calls"] = tool_calls
+                        agent_logger.info(f"[iter {iteration}] Created synthetic tool call: {tool_name}({args})")
+                    break
+            
+            # If still nothing, use reasoning as content
+            if not tool_calls:
+                agent_logger.info(f"[iter {iteration}] Using reasoning as content (no intent detected)")
+                content = reasoning
+                msg["content"] = content
         
         # Log what we got
         agent_logger.info(f"[iter {iteration}] finish_reason={finish_reason}, tool_calls={len(tool_calls)}, content={len(content) if content else 0} chars")
