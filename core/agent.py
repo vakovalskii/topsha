@@ -252,112 +252,21 @@ async def run_agent(
         tool_calls = msg.get("tool_calls", [])
         content = msg.get("content", "") or ""
         
-        # Some models put tool calls in reasoning/reasoning_content instead of tool_calls
+        # If no content and no tool_calls - model didn't finish, continue the loop
         reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
-        if reasoning and not tool_calls:
-            # Try to extract JSON tool call from reasoning
-            import re
-            json_match = re.search(r'\{[^{}]+\}', reasoning)
-            if json_match:
-                try:
-                    reasoning_json = json.loads(json_match.group())
-                    agent_logger.info(f"[iter {iteration}] Found JSON in reasoning: {reasoning_json}")
-                    
-                    # Check if this looks like a tool call (has known keys)
-                    if "cursor" in reasoning_json or "id" in reasoning_json:
-                        # This is likely fetch_page for search result
-                        result_id = reasoning_json.get("cursor") or reasoning_json.get("id")
-                        agent_logger.info(f"[iter {iteration}] Interpreting as fetch_page for result {result_id}")
-                        
-                        # Create synthetic tool call
-                        tool_calls = [{
-                            "id": f"reasoning_{iteration}",
-                            "type": "function",
-                            "function": {
-                                "name": "fetch_page",
-                                "arguments": json.dumps({"result_id": result_id})
-                            }
-                        }]
-                        msg["tool_calls"] = tool_calls
-                    elif any(k in reasoning_json for k in ["command", "path", "query", "url"]):
-                        # Determine tool from keys
-                        if "command" in reasoning_json:
-                            tool_name = "run_command"
-                        elif "query" in reasoning_json:
-                            tool_name = "search_web"
-                        elif "url" in reasoning_json:
-                            tool_name = "fetch_page"
-                        elif "path" in reasoning_json:
-                            tool_name = "read_file"
-                        else:
-                            tool_name = None
-                        
-                        if tool_name:
-                            agent_logger.info(f"[iter {iteration}] Interpreting as {tool_name}")
-                            tool_calls = [{
-                                "id": f"reasoning_{iteration}",
-                                "type": "function",
-                                "function": {
-                                    "name": tool_name,
-                                    "arguments": json.dumps(reasoning_json)
-                                }
-                            }]
-                            msg["tool_calls"] = tool_calls
-                except json.JSONDecodeError:
-                    pass
-        
-        # If still no content and no tool_calls, check if reasoning indicates intent
-        if not content and not tool_calls and reasoning:
-            reasoning_lower = reasoning.lower()
-            
-            # Check if model wants to continue but didn't emit tool call
-            intent_patterns = [
-                ("let's list", "list_directory", {"path": "."}),
-                ("list dir", "list_directory", {"path": "."}),
-                ("let's check", "list_directory", {"path": "."}),
-                ("let's send", "send_file", None),  # Need to find file path
-                ("send the file", "send_file", None),
-                ("let's read", "read_file", None),
-                ("let's search", "search_web", None),
-                ("let's fetch", "fetch_page", None),
-            ]
-            
-            for pattern, tool_name, default_args in intent_patterns:
-                if pattern in reasoning_lower:
-                    agent_logger.info(f"[iter {iteration}] Detected intent '{pattern}' → {tool_name}")
-                    
-                    # Try to extract path/query from reasoning
-                    args = default_args or {}
-                    
-                    # Extract file path if mentioned
-                    import re
-                    path_match = re.search(r'(/workspace/[^\s"\']+\.(?:pptx|pdf|txt|py|json|md|html))', reasoning)
-                    if path_match:
-                        args["path"] = path_match.group(1)
-                    elif tool_name == "send_file":
-                        # Try to find any .pptx file mention
-                        pptx_match = re.search(r'([A-Za-z0-9_-]+\.pptx)', reasoning)
-                        if pptx_match:
-                            args["path"] = pptx_match.group(1)
-                    
-                    if tool_name and (args or tool_name == "list_directory"):
-                        tool_calls = [{
-                            "id": f"intent_{iteration}",
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": json.dumps(args)
-                            }
-                        }]
-                        msg["tool_calls"] = tool_calls
-                        agent_logger.info(f"[iter {iteration}] Created synthetic tool call: {tool_name}({args})")
-                    break
-            
-            # If still nothing, use reasoning as content
-            if not tool_calls:
-                agent_logger.info(f"[iter {iteration}] Using reasoning as content (no intent detected)")
-                content = reasoning
-                msg["content"] = content
+        if not content and not tool_calls:
+            if reasoning:
+                agent_logger.info(f"[iter {iteration}] No content/tool_calls but has reasoning, adding continue prompt")
+                # Add a continue message to prompt model to finish
+                messages.append({
+                    "role": "user",
+                    "content": "[system: continue - выдай tool_call или финальный ответ в content]"
+                })
+                continue  # Don't break, continue the loop
+            else:
+                agent_logger.warning(f"[iter {iteration}] Empty response from model")
+                content = "(no response)"
+                break
         
         # Log what we got
         agent_logger.info(f"[iter {iteration}] finish_reason={finish_reason}, tool_calls={len(tool_calls)}, content={len(content) if content else 0} chars")
