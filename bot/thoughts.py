@@ -72,9 +72,11 @@ async def generate_thought(chat_id: int) -> Optional[str]:
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    thought = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                    if thought and len(thought) > 5:
-                        return thought
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+                    if content:
+                        thought = content.strip()
+                        if thought and len(thought) > 5:
+                            return thought
     except Exception as e:
         logger.error(f"Failed to generate thought: {e}")
     return None

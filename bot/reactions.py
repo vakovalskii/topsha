@@ -52,12 +52,14 @@ async def get_smart_reaction(text: str, username: str) -> str:
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    emoji = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                    if emoji in ALL_REACTIONS:
-                        return emoji
-                    for r in ALL_REACTIONS:
-                        if r in emoji:
-                            return r
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content")
+                    if content:
+                        emoji = content.strip()
+                        if emoji in ALL_REACTIONS:
+                            return emoji
+                        for r in ALL_REACTIONS:
+                            if r in emoji:
+                                return r
     except:
         pass
     
