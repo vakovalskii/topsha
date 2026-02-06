@@ -11,8 +11,13 @@ from pathlib import Path
 
 from config import CONFIG
 from logger import agent_logger, log_agent_step
-from tools import TOOL_DEFINITIONS, execute_tool
+from tools import execute_tool
 from models import ToolContext
+
+# Cache for tool definitions
+_tools_cache = None
+_tools_cache_time = 0
+TOOLS_CACHE_TTL = 60  # seconds
 
 
 @dataclass
@@ -93,6 +98,42 @@ def trim_history(history: list, max_msgs: int, max_chars: int) -> list:
         total = sum(len(json.dumps(m)) for m in history)
     
     return history
+
+
+def save_session_to_file(session: Session):
+    """Save session history to SESSION.json file"""
+    try:
+        session_file = os.path.join(session.cwd, "SESSION.json")
+        
+        # Convert history to user/assistant format for display
+        display_history = []
+        i = 0
+        while i < len(session.history):
+            entry = {}
+            msg = session.history[i]
+            
+            if msg.get("role") == "user":
+                # Add date prefix
+                date_str = datetime.now().strftime("[%Y-%m-%d]")
+                entry["user"] = f"{date_str} {msg.get('content', '')}"
+                
+                # Check if next message is assistant
+                if i + 1 < len(session.history) and session.history[i + 1].get("role") == "assistant":
+                    entry["assistant"] = session.history[i + 1].get("content", "")
+                    i += 1
+                
+                display_history.append(entry)
+            i += 1
+        
+        # Keep only last 10 entries
+        display_history = display_history[-10:]
+        
+        with open(session_file, 'w') as f:
+            json.dump({"history": display_history}, f, ensure_ascii=False, indent=2)
+        
+        agent_logger.debug(f"Saved session to {session_file}")
+    except Exception as e:
+        agent_logger.error(f"Failed to save session: {e}")
 
 
 async def call_llm(messages: list, tools: list) -> dict:
@@ -176,6 +217,125 @@ async def call_llm(messages: list, tools: list) -> dict:
         return {"error": str(e)}
 
 
+async def get_tool_definitions(source: str = "bot") -> list:
+    """Get tool definitions from Tools API + bot-specific tools
+    
+    Shared tools come from Tools API (can be toggled in admin panel)
+    Bot-only tools (send_file, send_dm, etc.) are added locally for 'bot' source
+    """
+    global _tools_cache, _tools_cache_time
+    import time
+    
+    now = time.time()
+    cache_key = source or "default"
+    
+    # Check if we have cached tools for this source
+    if isinstance(_tools_cache, dict) and cache_key in _tools_cache:
+        if (now - _tools_cache_time) < TOOLS_CACHE_TTL:
+            return _tools_cache[cache_key]
+    
+    # Initialize cache as dict if needed
+    if not isinstance(_tools_cache, dict):
+        _tools_cache = {}
+    
+    tools_api_url = os.getenv("TOOLS_API_URL", "http://tools-api:8100")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{tools_api_url}/tools/enabled",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tools = data.get("tools", [])
+                    
+                    # Add bot-only tools for 'bot' source
+                    if source == "bot":
+                        tools.extend(get_bot_only_tools())
+                    
+                    _tools_cache[cache_key] = tools
+                    _tools_cache_time = now
+                    agent_logger.debug(f"Loaded {len(tools)} tools for source={source}")
+                    return tools
+                else:
+                    agent_logger.error(f"Tools API error: {resp.status}")
+    except Exception as e:
+        agent_logger.error(f"Failed to fetch tools from API: {e}")
+    
+    # Fallback to local definitions if API fails
+    from tools import TOOL_DEFINITIONS
+    agent_logger.warning("Using local TOOL_DEFINITIONS as fallback")
+    return TOOL_DEFINITIONS
+
+
+def get_bot_only_tools() -> list:
+    """Bot-specific tools that are always available for telegram bot"""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "send_file",
+                "description": "Send a file from workspace to the chat.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Path to file in workspace"},
+                        "caption": {"type": "string", "description": "Optional caption"}
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send_dm",
+                "description": "Send a private message to current user.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "integer", "description": "User ID (usually current user)"},
+                        "text": {"type": "string", "description": "Message text"}
+                    },
+                    "required": ["user_id", "text"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "manage_message",
+                "description": "Edit or delete bot messages.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["edit", "delete"]},
+                        "message_id": {"type": "integer", "description": "Message ID to edit/delete"},
+                        "text": {"type": "string", "description": "New text (for edit)"}
+                    },
+                    "required": ["action", "message_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "ask_user",
+                "description": "Ask user a question and wait for their answer.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string", "description": "Question to ask"},
+                        "timeout": {"type": "integer", "description": "Seconds to wait (default 60)"}
+                    },
+                    "required": ["question"]
+                }
+            }
+        }
+    ]
+
+
 def clean_response(text: str) -> str:
     """Remove LLM artifacts from response"""
     if not text:
@@ -226,13 +386,16 @@ async def run_agent(
     final_response = ""
     iteration = 0
     
+    # Get tool definitions from API (filtered by source)
+    tool_definitions = await get_tool_definitions(source)
+    
     while iteration < CONFIG.max_iterations:
         iteration += 1
         ctx_chars = sum(len(json.dumps(m)) for m in messages)
         log_agent_step(iteration, CONFIG.max_iterations, len(messages), ctx_chars)
         
         # Call LLM
-        result = await call_llm(messages, TOOL_DEFINITIONS)
+        result = await call_llm(messages, tool_definitions)
         
         if "error" in result:
             agent_logger.error(f"LLM error: {result['error']}")
@@ -365,6 +528,9 @@ async def run_agent(
     
     # Trim history
     session.history = trim_history(session.history, CONFIG.max_history * 2, 30000)
+    
+    # Save to file for admin panel
+    save_session_to_file(session)
     
     final_response = clean_response(final_response)
     agent_logger.info(f"Response: {final_response[:100]}...")

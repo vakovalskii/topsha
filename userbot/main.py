@@ -54,31 +54,12 @@ MIN_MESSAGE_LENGTH = 2        # Ignore very short messages
 ALLOWED_CHATS = []  # Add chat IDs to limit, e.g. [-1001234567890]
 IGNORED_CHATS = []  # Add chat IDs to ignore
 
-# Owner IDs (can send direct commands) - comma-separated list
+# Owner IDs (can send direct commands like /stop) - comma-separated list
 _owner_ids_raw = os.getenv('OWNER_ID', '0')
 OWNER_IDS = set(int(x.strip()) for x in _owner_ids_raw.split(',') if x.strip().isdigit())
-OWNER_ONLY = os.getenv('OWNER_ONLY', 'true').lower() == 'true'  # Only respond to owners
 
-# ============ WHITELIST (dynamic, persisted) ============
-WHITELIST_FILE = os.path.join(os.path.dirname(__file__), 'session', 'whitelist.json')
-
-def load_whitelist() -> dict:
-    """Load whitelist from file: {user_id: username}"""
-    if os.path.exists(WHITELIST_FILE):
-        try:
-            with open(WHITELIST_FILE) as f:
-                return {int(k): v for k, v in json.load(f).items()}
-        except:
-            pass
-    return {}
-
-def save_whitelist(whitelist: dict):
-    """Save whitelist to file"""
-    os.makedirs(os.path.dirname(WHITELIST_FILE), exist_ok=True)
-    with open(WHITELIST_FILE, 'w') as f:
-        json.dump({str(k): v for k, v in whitelist.items()}, f)
-
-WHITELIST = load_whitelist()  # {user_id: username}
+# NOTE: Access control (allowlist, public, admin_only) is managed via admin panel
+# Old OWNER_ONLY and WHITELIST removed - single source of truth in core API
 
 # ============ SYSTEM PROMPT ============
 def load_system_prompt() -> str:
@@ -119,12 +100,8 @@ def should_respond(event, message_text: str) -> tuple[bool, str]:
     if sender_id == my_user_id:
         return False, "own message"
     
-    # OWNER_ONLY mode - only respond to owners or whitelisted users
-    if OWNER_ONLY:
-        is_owner = sender_id in OWNER_IDS
-        is_whitelisted = sender_id in WHITELIST
-        if not is_owner and not is_whitelisted:
-            return False, "not owner/whitelisted (OWNER_ONLY mode)"
+    # NOTE: Access control (public/admin_only/allowlist) is handled by core API
+    # The old OWNER_ONLY/WHITELIST checks are removed - single source of truth
     
     # Check ignored chats
     if chat_id in IGNORED_CHATS:
@@ -161,9 +138,6 @@ def should_respond(event, message_text: str) -> tuple[bool, str]:
         reason = "reply to me"
     else:
         # In groups: only respond to mentions/replies, not random messages
-        # Even for owner - ignore plain group messages
-        if OWNER_ONLY:
-            return False, "group message (owner mode: only DM/reply/mention)"
         chance = RESPONSE_CHANCE_GROUP
         reason = "group message"
     
@@ -185,13 +159,20 @@ def should_respond(event, message_text: str) -> tuple[bool, str]:
     else:
         return False, f"{reason} (chance={chance:.0%}, roll={roll:.2f} - skipped)"
 
+class AgentResponse:
+    def __init__(self, response: str | None, disabled: bool = False, access_denied: bool = False):
+        self.response = response
+        self.disabled = disabled
+        self.access_denied = access_denied
+
+
 async def call_agent(
     user_id: int, 
     chat_id: int, 
     message: str, 
     username: str = "user",
     chat_type: str = "private"
-) -> str | None:
+) -> AgentResponse:
     """Call gateway API to get agent response"""
     try:
         # Build system prompt with context
@@ -222,13 +203,17 @@ async def call_agent(
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    return data.get("response")
+                    return AgentResponse(
+                        response=data.get("response"),
+                        disabled=data.get("disabled", False),
+                        access_denied=data.get("access_denied", False)
+                    )
                 else:
                     print(f"[agent] Error: {resp.status}")
-                    return None
+                    return AgentResponse(None)
     except Exception as e:
         print(f"[agent] Request failed: {e}")
-        return None
+        return AgentResponse(None)
 
 # ============ USERBOT ACTIONS ============
 # These can be called by agent through special commands in response
@@ -618,10 +603,7 @@ async def main():
     print(f"[userbot] Chances: DM={RESPONSE_CHANCE_DM:.0%}, Group={RESPONSE_CHANCE_GROUP:.0%}, Mention={RESPONSE_CHANCE_MENTION:.0%}, Reply={RESPONSE_CHANCE_REPLY:.0%}")
     print(f"[userbot] Core: {CORE_URL}")
     print(f"[userbot] API server on http://0.0.0.0:8080")
-    if OWNER_ONLY:
-        print(f"[userbot] OWNER_ONLY mode: responding only to {OWNER_IDS}")
-    else:
-        print(f"[userbot] Public mode: responding to everyone")
+    print(f"[userbot] Access control via core API (admin panel)")
     
     @client.on(events.NewMessage(incoming=True))
     async def handler(event):
@@ -673,57 +655,8 @@ async def main():
                 await event.reply(result)
                 return
             elif cmd == '/stats':
-                stats = f"📊 Userbot Stats\n\nActive cooldowns: {len(last_response_time)}\nOwners: {OWNER_IDS}\nWhitelisted: {len(WHITELIST)}"
+                stats = f"📊 Userbot Stats\n\nActive cooldowns: {len(last_response_time)}\nOwners: {OWNER_IDS}"
                 await event.reply(stats)
-                return
-            elif cmd == '/allow':
-                # /allow @username - add user to whitelist
-                if not arg:
-                    await event.reply("Usage: /allow @username")
-                    return
-                try:
-                    if not arg.startswith('@'):
-                        arg = f'@{arg}'
-                    entity = await client.get_entity(arg)
-                    WHITELIST[entity.id] = arg.lstrip('@')
-                    save_whitelist(WHITELIST)
-                    await event.reply(f"✅ {arg} ({entity.id}) added to whitelist")
-                except Exception as e:
-                    await event.reply(f"❌ Failed: {e}")
-                return
-            elif cmd == '/deny':
-                # /deny @username - remove user from whitelist
-                if not arg:
-                    await event.reply("Usage: /deny @username or /deny <user_id>")
-                    return
-                try:
-                    # Try as user_id first
-                    if arg.isdigit():
-                        uid = int(arg)
-                    else:
-                        if not arg.startswith('@'):
-                            arg = f'@{arg}'
-                        entity = await client.get_entity(arg)
-                        uid = entity.id
-                    
-                    if uid in WHITELIST:
-                        username = WHITELIST.pop(uid)
-                        save_whitelist(WHITELIST)
-                        await event.reply(f"✅ @{username} ({uid}) removed from whitelist")
-                    else:
-                        await event.reply(f"⚠️ User {uid} not in whitelist")
-                except Exception as e:
-                    await event.reply(f"❌ Failed: {e}")
-                return
-            elif cmd == '/whitelist':
-                # Show current whitelist
-                if not WHITELIST:
-                    await event.reply("📋 Whitelist is empty")
-                else:
-                    lines = [f"📋 Whitelist ({len(WHITELIST)}):"]
-                    for uid, uname in WHITELIST.items():
-                        lines.append(f"  • @{uname} ({uid})")
-                    await event.reply("\n".join(lines))
                 return
             elif cmd == '/help':
                 help_text = """🤖 Userbot Commands:
@@ -733,21 +666,16 @@ async def main():
 /history [chat_id] - Get chat history
 /dialogs [limit] - List recent chats
 /stats - Show stats
+/help - This message
 
-👑 Admin commands:
-/allow @username - Add user to whitelist
-/deny @username - Remove from whitelist
-/whitelist - Show whitelist
-
-/help - This message"""
+📝 Access control managed via admin panel"""
                 await event.reply(help_text)
                 return
             
-        # Ignore bots (except whitelisted)
+        # Ignore bots
         if IGNORE_BOTS and isinstance(sender, User) and sender.bot:
-            if sender.id not in WHITELIST:
-                print(f"[skip] Bot {sender.id}: {text[:30]}... (bot not in whitelist)")
-                return
+            print(f"[skip] Bot {sender.id}: {text[:30]}... (ignoring bots)")
+            return
         
         sender_name = getattr(sender, 'username', None) or getattr(sender, 'first_name', 'anon')
         chat_id = event.chat_id
@@ -792,7 +720,7 @@ async def main():
             await asyncio.sleep(random.uniform(1, 3))
             
             # Call agent
-            response = await call_agent(
+            agent_result = await call_agent(
                 user_id=sender.id,
                 chat_id=chat_id,
                 message=text,
@@ -800,6 +728,17 @@ async def main():
                 chat_type=chat_type
             )
         
+        # Check if userbot is disabled
+        if agent_result.disabled:
+            print(f"[disabled] Userbot access disabled, ignoring message")
+            return
+        
+        # Check if access denied
+        if agent_result.access_denied:
+            print(f"[access_denied] User {sender.id} not allowed, ignoring message")
+            return
+        
+        response = agent_result.response
         if response:
             # Process any special commands in response
             response = await process_command(client, response)

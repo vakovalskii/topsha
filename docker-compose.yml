@@ -24,6 +24,27 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  # ============ TOOLS API - Single source of truth for tools ============
+  tools-api:
+    build: ./tools-api
+    container_name: tools-api
+    restart: unless-stopped
+    volumes:
+      - ./workspace/_shared:/data
+    networks:
+      - agent-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
   # ============ CORE - Agent + Tools + HTTP API ============
   core:
     build: ./core
@@ -32,8 +53,11 @@ services:
     depends_on:
       proxy:
         condition: service_healthy
+      tools-api:
+        condition: service_healthy
     environment:
       - PROXY_URL=http://proxy:3200
+      - TOOLS_API_URL=http://tools-api:8100
       - MODEL_NAME=openai/gpt-oss-120b
       - WORKSPACE=/workspace
       - WORKSPACE_HOST_PATH=${PWD}/workspace
@@ -141,6 +165,24 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+
+  # ============ ADMIN - React Web Panel ============
+  admin:
+    build: ./admin
+    container_name: admin
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      core:
+        condition: service_healthy
+    networks:
+      - agent-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
 
 # ============ SECRETS ============
 secrets:

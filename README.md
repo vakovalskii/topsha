@@ -23,26 +23,25 @@
               │                        │                        │
               ▼                        ▼                        ▼
        ┌─────────────┐          ┌─────────────┐          ┌─────────────┐
-       │     bot     │          │   userbot   │          │             │
-       │   aiogram   │          │  telethon   │          │             │
-       │   :4001     │          │    :8080    │          │             │
-       └──────┬──────┘          └──────┬──────┘          │             │
-              │                        │                 │             │
-              │         HTTP API       │                 │             │
-              └────────────┬───────────┘                 │             │
-                           │                             │             │
-                           ▼                             │             │
-                    ╔═════════════╗                      │             │
-                    ║    CORE     ║                      │             │
-                    ║   Agent     ║                      │   proxy     │
-                    ║  (FastAPI)  ║─────────────────────▶│   :3200     │
-                    ║   :4000     ║      LLM/Search      │             │
-                    ╠═════════════╣                      │  Secrets:   │
-                    ║ • ReAct     ║                      │  • api_key  │
-                    ║ • 14 Tools  ║                      │  • base_url │
-                    ║ • Scheduler ║                      │  • zai_key  │
-                    ║ • Security  ║                      └─────────────┘
-                    ╚══════┬══════╝
+       │     bot     │          │   userbot   │          │    admin    │
+       │   aiogram   │          │  telethon   │          │    React    │
+       │   :4001     │          │    :8080    │          │    :3000    │
+       └──────┬──────┘          └──────┬──────┘          └──────┬──────┘
+              │                        │                        │
+              │         HTTP API       │                        │
+              └────────────┬───────────┘                        │
+                           │                                    │
+                           ▼                                    │
+                    ╔═════════════╗                             │
+                    ║    CORE     ║◀────────────────────────────┘
+                    ║   Agent     ║
+                    ║  (FastAPI)  ║────────────────────▶ proxy :3200
+                    ║   :4000     ║      LLM/Search      (secrets)
+                    ╠═════════════╣
+                    ║ • ReAct     ║
+                    ║ • Security  ║
+                    ║ • Scheduler ║─────────▶ tools-api :8100
+                    ╚══════┬══════╝           (shared tools)
                            │
               ┌────────────┼────────────┐
               │            │            │
@@ -50,8 +49,6 @@
        ┌───────────┐ ┌───────────┐ ┌───────────┐
        │ sandbox_1 │ │ sandbox_2 │ │ sandbox_N │
        │  user123  │ │  user456  │ │   user... │
-       │ py:3.11   │ │ py:3.11   │ │ py:3.11   │
-       │ ports 5000│ │ ports 5010│ │ ports ... │
        └─────┬─────┘ └─────┬─────┘ └─────┬─────┘
              │             │             │
              ▼             ▼             ▼
@@ -61,43 +58,44 @@
        └───────────────────────────────────────┘
 ```
 
-**100% Python Stack:**
+## Services
 
 | Service | Stack | Port | Description |
 |---------|-------|------|-------------|
-| **core** | FastAPI | 4000 | ReAct Agent, 14 tools, scheduler, security |
+| **core** | FastAPI | 4000 | ReAct Agent, security, scheduler |
 | **bot** | aiogram | 4001 | Telegram Bot API, reactions, thoughts |
 | **userbot** | Telethon | 8080 | User account bot (optional) |
 | **proxy** | aiohttp | 3200 | Secrets isolation, LLM/search proxy |
+| **tools-api** | FastAPI | 8100 | Shared tools registry (single source of truth) |
+| **admin** | React | 3000 | Web admin panel |
 | **sandbox_*** | python:slim | 5000-5999 | Per-user isolated containers |
 
-## Core Agent
-
-The **core** is the brain of the system:
+## Tools Architecture
 
 ```
-core/
-├── main.py          # Entry + sandbox init
-├── agent.py         # ReAct loop (Think→Act→Observe)
-├── api.py           # HTTP endpoints for bot/userbot
-├── security.py      # 247 blocked patterns
-├── config.py        # All settings
-├── logger.py        # Centralized logging
-└── tools/           # 14 tools
-    ├── bash.py      # run_command (→ sandbox)
-    ├── sandbox.py   # Docker sandbox manager
-    ├── files.py     # read/write/edit/delete/search
-    ├── web.py       # search_web, fetch_page
-    ├── memory.py    # Persistent notes
-    ├── scheduler.py # Cron/reminders
-    ├── tasks.py     # Todo list
-    ├── send_file.py # Send files to chat
-    ├── send_dm.py   # Private messages
-    ├── message.py   # Edit/delete messages
-    └── ask_user.py  # Interactive questions
+┌─────────────────────────────────────────────────────────────┐
+│                    Tools API (:8100)                        │
+│                                                             │
+│  SHARED TOOLS (13) - можно вкл/выкл в админке:             │
+│  run_command, read_file, write_file, edit_file,            │
+│  delete_file, search_files, search_text, list_directory,   │
+│  search_web, fetch_page, memory, schedule_task,            │
+│  manage_tasks                                               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                         Core Agent                          │
+├─────────────────────────────────────────────────────────────┤
+│  source=bot:     13 shared + 4 bot-only = 17 tools         │
+│  source=userbot: 13 shared              = 13 tools         │
+├─────────────────────────────────────────────────────────────┤
+│  BOT-ONLY (4) - always available for telegram bot:         │
+│  send_file, send_dm, manage_message, ask_user              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Tools (14)
+### Shared Tools (13)
 
 | Tool | Description |
 |------|-------------|
@@ -114,12 +112,38 @@ core/
 | `memory` | Persistent user notes |
 | `schedule_task` | Schedule reminders/cron |
 | `manage_tasks` | Session todo list |
+
+### Bot-Only Tools (4)
+
+| Tool | Description |
+|------|-------------|
+| `send_file` | Send file to chat |
+| `send_dm` | Send private message |
+| `manage_message` | Edit/delete bot messages |
 | `ask_user` | Ask question, wait answer |
 
-**Bot-only tools** (via HTTP callback):
-- `send_file` — Send file to chat
-- `send_dm` — Send private message
-- `manage_message` — Edit/delete bot messages
+## Admin Panel
+
+Web panel at `:3000` for managing the system:
+
+- **Dashboard** — stats, active users, sandboxes
+- **Services** — start/stop bot, userbot containers
+- **Config** — agent settings, rate limits
+- **Security** — 247 blocked patterns
+- **Tools** — enable/disable shared tools
+- **Users** — sessions, chat history, memory
+- **Logs** — real-time service logs
+- **Access Control** — public/admin-only/allowlist modes
+
+## Access Control
+
+Three modes managed via admin panel:
+
+| Mode | Description |
+|------|-------------|
+| **Public** | Anyone can use bot/userbot |
+| **Admin Only** | Only admin (ID 809532582) |
+| **Allowlist** | Admin + configured user IDs |
 
 ## Dynamic Sandbox
 
@@ -147,6 +171,9 @@ docker compose up -d
 
 # 3. Check
 docker compose logs -f
+
+# 4. Admin panel
+open http://localhost:3000
 ```
 
 ## Security
@@ -162,6 +189,7 @@ docker compose logs -f
 4. **Command blocking** — env, /proc, secrets paths blocked
 5. **Output sanitization** — secrets redacted from output
 6. **Rate limiting** — Telegram API, groups, reactions
+7. **Access control** — public/admin/allowlist modes
 
 ## Project Structure
 
@@ -174,8 +202,9 @@ LocalTopSH/
 │   ├── main.py
 │   ├── agent.py         # ReAct loop
 │   ├── api.py           # HTTP API
+│   ├── admin_api.py     # Admin panel API
 │   ├── security.py      # Blocked patterns
-│   ├── tools/           # 14 tools
+│   ├── tools/           # Tool executors
 │   └── Dockerfile
 │
 ├── bot/                  # Telegram Bot (Python/aiogram)
@@ -193,9 +222,19 @@ LocalTopSH/
 │   ├── main.py
 │   └── Dockerfile
 │
+├── tools-api/            # Shared Tools Registry (Python/FastAPI)
+│   ├── main.py
+│   └── Dockerfile
+│
+├── admin/                # Admin Panel (React/Vite)
+│   ├── src/
+│   │   ├── pages/       # Dashboard, Config, Security, Tools, Users, Logs
+│   │   └── api.js
+│   └── Dockerfile
+│
 └── workspace/            # User data (gitignored)
     ├── {user_id}/       # Per-user workspace
-    └── _shared/         # Shared data
+    └── _shared/         # Shared config (tools, access)
 ```
 
 ## Secrets
@@ -206,6 +245,9 @@ LocalTopSH/
 | `base_url.txt` | ✅ | LLM API URL |
 | `api_key.txt` | ✅ | LLM API key |
 | `zai_api_key.txt` | ✅ | Z.AI search key |
+| `telegram_api_id.txt` | Userbot | Telegram API ID |
+| `telegram_api_hash.txt` | Userbot | Telegram API Hash |
+| `telegram_phone.txt` | Userbot | Phone number |
 
 ## License
 

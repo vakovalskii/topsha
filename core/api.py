@@ -9,9 +9,11 @@ from config import CONFIG
 from logger import api_logger, log_request, log_response
 from agent import run_agent, sessions
 from tools.scheduler import scheduler
+from admin_api import router as admin_router, load_config as load_admin_config
 
 
 app = FastAPI(title="Core Agent API")
+app.include_router(admin_router)
 
 
 class ChatRequest(BaseModel):
@@ -102,7 +104,39 @@ async def health():
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    log_request(req.user_id, req.chat_id, req.username or "", req.source or "bot", req.message)
+    # Check access control
+    admin_config = load_admin_config()
+    access = admin_config.get("access", {})
+    source = req.source or "bot"
+    user_id = req.user_id
+    
+    # Check if service is enabled
+    if source == "bot" and not access.get("bot_enabled", True):
+        api_logger.info(f"Bot access disabled, rejecting request from {user_id}")
+        return {"response": None, "disabled": True}
+    
+    if source == "userbot" and not access.get("userbot_enabled", True):
+        api_logger.info(f"Userbot access disabled, rejecting request from {user_id}")
+        return {"response": None, "disabled": True}
+    
+    # Check access mode
+    mode = access.get("mode", "admin_only")
+    admin_id = access.get("admin_id", 809532582)
+    allowlist = access.get("allowlist", [])
+    
+    has_access = False
+    if mode == "public":
+        has_access = True
+    elif mode == "admin_only":
+        has_access = (user_id == admin_id)
+    elif mode == "allowlist":
+        has_access = (user_id == admin_id) or (user_id in allowlist)
+    
+    if not has_access:
+        api_logger.info(f"Access denied for {user_id} (mode={mode})")
+        return {"response": None, "access_denied": True, "mode": mode}
+    
+    log_request(req.user_id, req.chat_id, req.username or "", source, req.message)
     
     try:
         response = await run_agent(
@@ -111,7 +145,7 @@ async def chat(req: ChatRequest):
             message=req.message,
             username=req.username or "",
             chat_type=req.chat_type or "private",
-            source=req.source or "bot"
+            source=source
         )
         
         log_response(response)

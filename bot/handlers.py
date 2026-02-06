@@ -242,7 +242,7 @@ async def handle_message(message: Message):
             
             # Call core
             chat_type_str = chat_type.value if hasattr(chat_type, 'value') else str(chat_type)
-            response = await call_core(user_id, chat_id, message_for_agent, username, chat_type_str)
+            core_result = await call_core(user_id, chat_id, message_for_agent, username, chat_type_str)
             
             # Stop typing
             if typing_task:
@@ -252,11 +252,21 @@ async def handle_message(message: Message):
                 except asyncio.CancelledError:
                     pass
             
+            # Check if bot is disabled
+            if core_result.disabled:
+                await set_reaction(chat_id, message_id, "🔒")
+                return
+            
+            # Check if access denied
+            if core_result.access_denied:
+                await set_reaction(chat_id, message_id, "🚫")
+                return
+            
             # Done reaction
             await set_reaction(chat_id, message_id, get_random_done_emoji())
             
             # Send response
-            final_response = response or "(no response)"
+            final_response = core_result.response or "(no response)"
             final_response = clean_model_artifacts(final_response)
             print(f"[OUT] → @{username}:\n{final_response[:200]}\n")
             

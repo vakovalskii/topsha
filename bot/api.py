@@ -6,13 +6,20 @@ import aiohttp
 from config import CORE_URL
 
 
+class CoreResponse:
+    def __init__(self, response: Optional[str], disabled: bool = False, access_denied: bool = False):
+        self.response = response
+        self.disabled = disabled
+        self.access_denied = access_denied
+
+
 async def call_core(
     user_id: int,
     chat_id: int,
     message: str,
     username: str,
     chat_type: str
-) -> Optional[str]:
+) -> CoreResponse:
     """Call Core API for agent processing"""
     try:
         async with aiohttp.ClientSession() as session:
@@ -30,12 +37,16 @@ async def call_core(
             ) as resp:
                 if resp.status != 200:
                     print(f"[core] Error: {resp.status}")
-                    return None
+                    return CoreResponse(None)
                 data = await resp.json()
-                return data.get("response")
+                return CoreResponse(
+                    response=data.get("response"),
+                    disabled=data.get("disabled", False),
+                    access_denied=data.get("access_denied", False)
+                )
     except Exception as e:
         print(f"[core] Request failed: {e}")
-        return None
+        return CoreResponse(None)
 
 
 async def clear_session(user_id: int) -> bool:

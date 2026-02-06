@@ -1,0 +1,668 @@
+"""Admin API endpoints for the admin panel"""
+
+import os
+import json
+import subprocess
+import asyncio
+from datetime import datetime
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+import docker
+
+router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# Docker client
+docker_client = None
+try:
+    docker_client = docker.from_env()
+except:
+    pass
+
+
+# ============ MODELS ============
+
+class ConfigUpdate(BaseModel):
+    agent: Optional[dict] = None
+    bot: Optional[dict] = None
+    security: Optional[dict] = None
+    limits: Optional[dict] = None
+    access: Optional[dict] = None
+
+
+class AccessToggle(BaseModel):
+    enabled: bool
+
+
+class AccessModeUpdate(BaseModel):
+    mode: str  # "public", "admin_only", "allowlist"
+
+
+class AllowlistUpdate(BaseModel):
+    user_id: int
+    action: str  # "add" or "remove"
+
+
+class PatternRequest(BaseModel):
+    pattern: str
+
+
+class ToolToggle(BaseModel):
+    enabled: bool
+
+
+# ============ STATS ============
+
+@router.get("/stats")
+async def get_stats():
+    """Get dashboard statistics"""
+    stats = {
+        "active_users": 0,
+        "active_sandboxes": 0,
+        "requests_today": 0,
+        "tools_executed": 0,
+        "recent_requests": [],
+        "security_events": []
+    }
+    
+    # Count sandboxes
+    if docker_client:
+        containers = docker_client.containers.list(filters={"name": "sandbox_"})
+        stats["active_sandboxes"] = len(containers)
+    
+    # Count workspaces
+    workspace = os.getenv("WORKSPACE", "/workspace")
+    if os.path.isdir(workspace):
+        users = [d for d in os.listdir(workspace) if d.isdigit()]
+        stats["active_users"] = len(users)
+    
+    return stats
+
+
+@router.get("/health")
+async def get_health():
+    """Health check for all services"""
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+
+# ============ SERVICES ============
+
+@router.get("/services")
+async def get_services():
+    """Get list of Docker services (fast, no stats)"""
+    if not docker_client:
+        return []
+    
+    services = []
+    target_containers = ["core", "bot", "proxy", "userbot", "admin"]
+    
+    for name in target_containers:
+        try:
+            c = docker_client.containers.get(name)
+            # Fast info only - no stats() call which is very slow
+            services.append({
+                "name": name,
+                "status": c.status,
+                "image": c.image.tags[0] if c.image.tags else "-",
+                "uptime": c.attrs.get("State", {}).get("StartedAt", "")[:19].replace("T", " "),
+                "memory": "-",
+                "cpu": "-",
+                "ports": ", ".join([f"{p}" for p in c.ports.keys()]) if c.ports else ""
+            })
+        except docker.errors.NotFound:
+            services.append({
+                "name": name,
+                "status": "not found",
+                "image": "-",
+                "uptime": "-",
+                "memory": "-",
+                "cpu": "-"
+            })
+        except Exception as e:
+            services.append({
+                "name": name,
+                "status": "error",
+                "image": str(e)[:50],
+                "uptime": "-",
+                "memory": "-",
+                "cpu": "-"
+            })
+    
+    return services
+
+
+@router.get("/services/{name}/stats")
+async def get_service_stats(name: str):
+    """Get detailed stats for a single service (slow, calls docker stats)"""
+    if not docker_client:
+        raise HTTPException(503, "Docker not available")
+    
+    try:
+        c = docker_client.containers.get(name)
+        # This is slow (~2s) - only call when needed
+        stats = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: c.stats(stream=False)
+        )
+        
+        mem_usage = stats.get("memory_stats", {}).get("usage", 0)
+        mem_limit = stats.get("memory_stats", {}).get("limit", 1)
+        mem_percent = (mem_usage / mem_limit * 100) if mem_limit else 0
+        
+        cpu_delta = stats.get("cpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0) - \
+                   stats.get("precpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0)
+        system_delta = stats.get("cpu_stats", {}).get("system_cpu_usage", 0) - \
+                      stats.get("precpu_stats", {}).get("system_cpu_usage", 0)
+        cpu_percent = (cpu_delta / system_delta * 100) if system_delta else 0
+        
+        return {
+            "name": name,
+            "memory": f"{mem_usage // (1024*1024)}MB ({mem_percent:.1f}%)",
+            "cpu": f"{cpu_percent:.1f}%",
+            "memory_bytes": mem_usage,
+            "memory_limit": mem_limit
+        }
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"Service {name} not found")
+    
+    return services
+
+
+@router.post("/services/{name}/restart")
+async def restart_service(name: str):
+    """Restart a service"""
+    if not docker_client:
+        raise HTTPException(503, "Docker not available")
+    try:
+        c = docker_client.containers.get(name)
+        c.restart(timeout=10)
+        return {"success": True}
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"Service {name} not found")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/services/{name}/stop")
+async def stop_service(name: str):
+    """Stop a service"""
+    if not docker_client:
+        raise HTTPException(503, "Docker not available")
+    try:
+        c = docker_client.containers.get(name)
+        c.stop(timeout=10)
+        return {"success": True}
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"Service {name} not found")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/services/{name}/start")
+async def start_service(name: str):
+    """Start a service"""
+    if not docker_client:
+        raise HTTPException(503, "Docker not available")
+    try:
+        c = docker_client.containers.get(name)
+        c.start()
+        return {"success": True}
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"Service {name} not found")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ============ CONFIG ============
+
+CONFIG_FILE = "/workspace/_shared/admin_config.json"
+
+def load_config():
+    """Load config from file"""
+    default = {
+        "agent": {
+            "model": os.getenv("MODEL_NAME", "openai/gpt-oss-120b"),
+            "max_iterations": 30,
+            "max_history": 10,
+            "tool_timeout": 120
+        },
+        "bot": {
+            "reactions_enabled": True,
+            "thoughts_enabled": True,
+            "reaction_chance": 0.15,
+            "ignore_chance": 0.05,
+            "max_length": 4000
+        },
+        "security": {
+            "approval_required": True,
+            "block_patterns": True,
+            "sandbox_enabled": True,
+            "max_blocked": 3
+        },
+        "limits": {
+            "sandbox_ttl": 10,
+            "sandbox_memory": "512m",
+            "workspace_limit": 500,
+            "max_concurrent": 10
+        },
+        "access": {
+            "bot_enabled": True,
+            "userbot_enabled": True,
+            "mode": "admin_only",  # "public", "admin_only", "allowlist"
+            "admin_id": 809532582,
+            "allowlist": []  # list of user_ids
+        }
+    }
+    
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE) as f:
+                return {**default, **json.load(f)}
+        except:
+            pass
+    return default
+
+
+def save_config(config):
+    """Save config to file"""
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+@router.get("/config")
+async def get_config():
+    """Get current configuration"""
+    return load_config()
+
+
+@router.put("/config")
+async def update_config(data: ConfigUpdate):
+    """Update configuration"""
+    config = load_config()
+    
+    if data.agent:
+        config["agent"] = {**config.get("agent", {}), **data.agent}
+    if data.bot:
+        config["bot"] = {**config.get("bot", {}), **data.bot}
+    if data.security:
+        config["security"] = {**config.get("security", {}), **data.security}
+    if data.limits:
+        config["limits"] = {**config.get("limits", {}), **data.limits}
+    if data.access:
+        config["access"] = {**config.get("access", {}), **data.access}
+    
+    save_config(config)
+    return {"success": True}
+
+
+# ============ ACCESS CONTROL ============
+
+@router.get("/access")
+async def get_access():
+    """Get access control status"""
+    config = load_config()
+    access = config.get("access", {})
+    return {
+        "bot_enabled": access.get("bot_enabled", True),
+        "userbot_enabled": access.get("userbot_enabled", True),
+        "mode": access.get("mode", "admin_only"),
+        "admin_id": access.get("admin_id", 809532582)
+    }
+
+
+@router.put("/access/bot")
+async def toggle_bot(data: AccessToggle):
+    """Enable/disable bot"""
+    config = load_config()
+    if "access" not in config:
+        config["access"] = {}
+    config["access"]["bot_enabled"] = data.enabled
+    save_config(config)
+    return {"success": True, "bot_enabled": data.enabled}
+
+
+@router.put("/access/userbot")
+async def toggle_userbot(data: AccessToggle):
+    """Enable/disable userbot"""
+    config = load_config()
+    if "access" not in config:
+        config["access"] = {}
+    config["access"]["userbot_enabled"] = data.enabled
+    save_config(config)
+    return {"success": True, "userbot_enabled": data.enabled}
+
+
+@router.put("/access/mode")
+async def set_access_mode(data: AccessModeUpdate):
+    """Set access mode: public, admin_only, or allowlist"""
+    if data.mode not in ["public", "admin_only", "allowlist"]:
+        raise HTTPException(400, "Invalid mode. Use: public, admin_only, allowlist")
+    
+    config = load_config()
+    if "access" not in config:
+        config["access"] = {}
+    config["access"]["mode"] = data.mode
+    save_config(config)
+    return {"success": True, "mode": data.mode}
+
+
+@router.get("/access/allowlist")
+async def get_allowlist():
+    """Get current allowlist"""
+    config = load_config()
+    access = config.get("access", {})
+    return {
+        "allowlist": access.get("allowlist", []),
+        "admin_id": access.get("admin_id", 809532582)
+    }
+
+
+@router.post("/access/allowlist")
+async def update_allowlist(data: AllowlistUpdate):
+    """Add or remove user from allowlist"""
+    config = load_config()
+    if "access" not in config:
+        config["access"] = {}
+    if "allowlist" not in config["access"]:
+        config["access"]["allowlist"] = []
+    
+    allowlist = config["access"]["allowlist"]
+    
+    if data.action == "add":
+        if data.user_id not in allowlist:
+            allowlist.append(data.user_id)
+    elif data.action == "remove":
+        if data.user_id in allowlist:
+            allowlist.remove(data.user_id)
+    else:
+        raise HTTPException(400, "Invalid action. Use: add, remove")
+    
+    config["access"]["allowlist"] = allowlist
+    save_config(config)
+    return {"success": True, "allowlist": allowlist}
+
+
+# ============ SECURITY PATTERNS ============
+
+PATTERNS_FILE = "/app/src/approvals/blocked-patterns.json"
+
+@router.get("/security/patterns")
+async def get_security_patterns():
+    """Get blocked patterns"""
+    patterns = []
+    if os.path.exists(PATTERNS_FILE):
+        try:
+            with open(PATTERNS_FILE) as f:
+                patterns = json.load(f)
+        except:
+            pass
+    return {"patterns": patterns}
+
+
+@router.post("/security/patterns")
+async def add_security_pattern(req: PatternRequest):
+    """Add a blocked pattern"""
+    patterns = []
+    if os.path.exists(PATTERNS_FILE):
+        with open(PATTERNS_FILE) as f:
+            patterns = json.load(f)
+    
+    if req.pattern not in patterns:
+        patterns.append(req.pattern)
+        with open(PATTERNS_FILE, "w") as f:
+            json.dump(patterns, f, indent=2)
+    
+    return {"success": True}
+
+
+@router.delete("/security/patterns")
+async def delete_security_pattern(req: PatternRequest):
+    """Delete a blocked pattern"""
+    patterns = []
+    if os.path.exists(PATTERNS_FILE):
+        with open(PATTERNS_FILE) as f:
+            patterns = json.load(f)
+    
+    if req.pattern in patterns:
+        patterns.remove(req.pattern)
+        with open(PATTERNS_FILE, "w") as f:
+            json.dump(patterns, f, indent=2)
+    
+    return {"success": True}
+
+
+# ============ TOOLS ============
+
+import aiohttp
+
+TOOLS_API_URL = os.getenv("TOOLS_API_URL", "http://tools-api:8100")
+
+@router.get("/tools")
+async def get_tools():
+    """Get available tools from Tools API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{TOOLS_API_URL}/tools",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tools = []
+                    for tool in data.get("tools", []):
+                        tools.append({
+                            "name": tool["name"],
+                            "description": tool.get("description", "")[:100],
+                            "enabled": tool.get("enabled", True),
+                            "icon": "🔧"
+                        })
+                    return {"tools": tools}
+    except Exception as e:
+        print(f"Tools API error: {e}")
+    
+    # Fallback to local
+    from tools import TOOL_DEFINITIONS
+    tools = []
+    for tool in TOOL_DEFINITIONS:
+        tools.append({
+            "name": tool["function"]["name"],
+            "description": tool["function"].get("description", "")[:100],
+            "enabled": True,
+            "icon": "🔧"
+        })
+    return {"tools": tools}
+
+
+@router.put("/tools/{name}")
+async def toggle_tool(name: str, data: ToolToggle):
+    """Enable/disable a tool via Tools API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.put(
+                f"{TOOLS_API_URL}/tools/{name}",
+                json={"enabled": data.enabled},
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, f"Tools API error")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+# ============ USERS & SANDBOXES ============
+
+@router.get("/sandboxes")
+async def get_sandboxes():
+    """Get active sandboxes"""
+    if not docker_client:
+        return {"sandboxes": []}
+    
+    sandboxes = []
+    containers = docker_client.containers.list(filters={"name": "sandbox_"})
+    
+    for c in containers:
+        user_id = c.name.replace("sandbox_", "")
+        ports = list(c.ports.keys()) if c.ports else []
+        
+        sandboxes.append({
+            "user_id": user_id,
+            "container_id": c.id[:12],
+            "ports": [p.split("/")[0] for p in ports],
+            "active_for": c.attrs.get("State", {}).get("StartedAt", "")[:19].replace("T", " ")
+        })
+    
+    return {"sandboxes": sandboxes}
+
+
+@router.delete("/sandboxes/{user_id}")
+async def kill_sandbox(user_id: str):
+    """Kill a user's sandbox"""
+    if not docker_client:
+        raise HTTPException(503, "Docker not available")
+    
+    try:
+        c = docker_client.containers.get(f"sandbox_{user_id}")
+        c.stop(timeout=1)
+        c.remove(force=True)
+        return {"success": True}
+    except docker.errors.NotFound:
+        raise HTTPException(404, "Sandbox not found")
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/sessions")
+async def get_sessions():
+    """Get all user sessions from workspace"""
+    workspace = os.getenv("WORKSPACE", "/workspace")
+    sessions = []
+    
+    if not os.path.isdir(workspace):
+        return {"sessions": []}
+    
+    for user_dir in os.listdir(workspace):
+        user_path = os.path.join(workspace, user_dir)
+        
+        # Skip non-numeric directories (like _shared)
+        if not user_dir.isdigit() or not os.path.isdir(user_path):
+            continue
+        
+        session_file = os.path.join(user_path, "SESSION.json")
+        memory_file = os.path.join(user_path, "MEMORY.md")
+        
+        # Get session data
+        message_count = 0
+        last_message = None
+        history = []
+        
+        if os.path.exists(session_file):
+            try:
+                with open(session_file) as f:
+                    data = json.load(f)
+                    history = data.get("history", [])
+                    message_count = len(history)
+                    if history:
+                        last_message = history[-1].get("user", "")[:100]
+            except:
+                pass
+        
+        # Get last active time from file modification
+        last_active = None
+        for check_file in [session_file, memory_file]:
+            if os.path.exists(check_file):
+                mtime = os.path.getmtime(check_file)
+                dt = datetime.fromtimestamp(mtime)
+                if last_active is None or mtime > last_active:
+                    last_active = mtime
+                    last_active_str = dt.strftime("%Y-%m-%d %H:%M")
+        
+        if last_active is None:
+            # Fallback to directory mtime
+            mtime = os.path.getmtime(user_path)
+            last_active_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        
+        sessions.append({
+            "user_id": user_dir,
+            "message_count": message_count,
+            "last_active": last_active_str,
+            "last_message": last_message
+        })
+    
+    # Sort by last_active descending
+    sessions.sort(key=lambda x: x["last_active"], reverse=True)
+    
+    return {"sessions": sessions}
+
+
+@router.get("/sessions/{user_id}")
+async def get_session_detail(user_id: str):
+    """Get detailed session data for a user"""
+    workspace = os.getenv("WORKSPACE", "/workspace")
+    user_path = os.path.join(workspace, user_id)
+    
+    if not os.path.isdir(user_path):
+        raise HTTPException(404, "User not found")
+    
+    session_file = os.path.join(user_path, "SESSION.json")
+    memory_file = os.path.join(user_path, "MEMORY.md")
+    
+    result = {
+        "user_id": user_id,
+        "history": [],
+        "memory": ""
+    }
+    
+    if os.path.exists(session_file):
+        try:
+            with open(session_file) as f:
+                data = json.load(f)
+                result["history"] = data.get("history", [])
+        except:
+            pass
+    
+    if os.path.exists(memory_file):
+        try:
+            with open(memory_file) as f:
+                result["memory"] = f.read()
+        except:
+            pass
+    
+    return result
+
+
+@router.delete("/sessions/{user_id}")
+async def clear_session(user_id: str):
+    """Clear a user's session history"""
+    workspace = os.getenv("WORKSPACE", "/workspace")
+    session_file = os.path.join(workspace, user_id, "SESSION.json")
+    
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, 'w') as f:
+                json.dump({"history": []}, f)
+            return {"success": True}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+    
+    raise HTTPException(404, "Session not found")
+
+
+# ============ LOGS ============
+
+@router.get("/logs/{service}")
+async def get_logs(service: str, lines: int = 100):
+    """Get service logs"""
+    if not docker_client:
+        return {"logs": ["Docker not available"]}
+    
+    try:
+        c = docker_client.containers.get(service)
+        log_bytes = c.logs(tail=lines, timestamps=False)
+        log_lines = log_bytes.decode("utf-8", errors="replace").split("\n")
+        return {"logs": log_lines}
+    except docker.errors.NotFound:
+        return {"logs": [f"Service {service} not found"]}
+    except Exception as e:
+        return {"logs": [f"Error: {e}"]}
