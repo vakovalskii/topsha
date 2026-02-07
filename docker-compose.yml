@@ -201,7 +201,7 @@ services:
     container_name: admin
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"  # localhost only!
+      - "3000:3000"  # Protected by Basic Auth
     environment:
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASSWORD_FILE=/run/secrets/admin_password
