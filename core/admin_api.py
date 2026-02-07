@@ -682,3 +682,211 @@ async def get_logs(service: str, lines: int = 100):
         return {"logs": [f"Service {service} not found"]}
     except Exception as e:
         return {"logs": [f"Error: {e}"]}
+
+
+# ============ MCP SERVERS ============
+
+class McpServerCreate(BaseModel):
+    name: str
+    url: str
+    description: Optional[str] = None
+
+
+@router.get("/mcp/servers")
+async def get_mcp_servers():
+    """Get MCP servers from Tools API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{TOOLS_API_URL}/mcp/servers",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception as e:
+        print(f"MCP API error: {e}")
+    return {"servers": []}
+
+
+@router.post("/mcp/servers")
+async def add_mcp_server(data: McpServerCreate):
+    """Add MCP server via Tools API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{TOOLS_API_URL}/mcp/servers",
+                json=data.dict(),
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    error = await resp.text()
+                    raise HTTPException(resp.status, error)
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+@router.delete("/mcp/servers/{name}")
+async def remove_mcp_server(name: str):
+    """Remove MCP server via Tools API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.delete(
+                f"{TOOLS_API_URL}/mcp/servers/{name}",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, "Failed to remove server")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+@router.post("/mcp/servers/{name}/refresh")
+async def refresh_mcp_server(name: str):
+    """Refresh tools from MCP server"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{TOOLS_API_URL}/mcp/servers/{name}/refresh",
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, "Failed to refresh")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+@router.post("/mcp/refresh-all")
+async def refresh_all_mcp():
+    """Refresh all MCP servers"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{TOOLS_API_URL}/mcp/refresh-all",
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, "Failed to refresh")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+# ============ SKILLS ============
+
+class SkillToggle(BaseModel):
+    enabled: bool
+
+
+class SkillInstall(BaseModel):
+    name: str
+    source: str = "anthropic"
+
+
+@router.get("/skills")
+async def get_skills():
+    """Get skills from Tools API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{TOOLS_API_URL}/skills",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception as e:
+        print(f"Skills API error: {e}")
+    return {"skills": []}
+
+
+@router.get("/skills/available")
+async def get_available_skills():
+    """Get available skills to install"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{TOOLS_API_URL}/skills/available",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception as e:
+        print(f"Skills API error: {e}")
+    return {"skills": []}
+
+
+@router.put("/skills/{name}")
+async def toggle_skill(name: str, data: SkillToggle):
+    """Enable/disable a skill"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.put(
+                f"{TOOLS_API_URL}/skills/{name}",
+                json={"enabled": data.enabled},
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, "Failed to toggle skill")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+@router.post("/skills/scan")
+async def scan_skills():
+    """Scan for skills"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{TOOLS_API_URL}/skills/scan",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, "Failed to scan")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+@router.post("/skills/install")
+async def install_skill(data: SkillInstall):
+    """Install a skill from Anthropic or other source"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{TOOLS_API_URL}/skills/install",
+                json=data.dict(),
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    error = await resp.text()
+                    raise HTTPException(resp.status, error)
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")
+
+
+@router.delete("/skills/{name}")
+async def uninstall_skill(name: str):
+    """Uninstall a skill"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.delete(
+                f"{TOOLS_API_URL}/skills/{name}",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    raise HTTPException(resp.status, "Failed to uninstall")
+    except aiohttp.ClientError as e:
+        raise HTTPException(503, f"Tools API unavailable: {e}")

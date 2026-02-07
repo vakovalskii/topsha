@@ -87,3 +87,27 @@ export const updateAllowlist = (user_id, action) => fetchApi('/access/allowlist'
 export const getSessions = () => fetchApi('/sessions')
 export const getSessionDetail = (userId) => fetchApi(`/sessions/${userId}`)
 export const clearSession = (userId) => fetchApi(`/sessions/${userId}`, { method: 'DELETE' })
+
+// MCP Servers
+export const getMcpServers = () => fetchApi('/mcp/servers')
+export const addMcpServer = (server) => fetchApi('/mcp/servers', {
+  method: 'POST',
+  body: JSON.stringify(server)
+})
+export const removeMcpServer = (name) => fetchApi(`/mcp/servers/${name}`, { method: 'DELETE' })
+export const refreshMcpServer = (name) => fetchApi(`/mcp/servers/${name}/refresh`, { method: 'POST' })
+export const refreshAllMcp = () => fetchApi('/mcp/refresh-all', { method: 'POST' })
+
+// Skills
+export const getSkills = () => fetchApi('/skills')
+export const getAvailableSkills = () => fetchApi('/skills/available')
+export const toggleSkill = (name, enabled) => fetchApi(`/skills/${name}`, {
+  method: 'PUT',
+  body: JSON.stringify({ enabled })
+})
+export const scanSkills = () => fetchApi('/skills/scan', { method: 'POST' })
+export const installSkill = (name) => fetchApi('/skills/install', {
+  method: 'POST',
+  body: JSON.stringify({ name, source: 'anthropic' })
+})
+export const uninstallSkill = (name) => fetchApi(`/skills/${name}`, { method: 'DELETE' })
