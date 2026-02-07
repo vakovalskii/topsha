@@ -243,17 +243,20 @@ async def call_llm(messages: list, tools: list) -> dict:
         return {"error": str(e)}
 
 
-async def get_tool_definitions(source: str = "bot") -> list:
+async def get_tool_definitions(source: str = "bot", lazy_loading: bool = True) -> list:
     """Get tool definitions from Tools API + bot-specific tools
     
     Shared tools come from Tools API (can be toggled in admin panel)
     Bot-only tools (send_file, send_dm, etc.) are added locally for 'bot' source
+    
+    If lazy_loading=True, only loads base tools + search_tools capability.
+    Agent can discover and load more tools via search_tools/load_tools.
     """
     global _tools_cache, _tools_cache_time
     import time
     
     now = time.time()
-    cache_key = source or "default"
+    cache_key = f"{source}_{'lazy' if lazy_loading else 'full'}"
     
     # Check if we have cached tools for this source
     if isinstance(_tools_cache, dict) and cache_key in _tools_cache:
@@ -268,8 +271,11 @@ async def get_tool_definitions(source: str = "bot") -> list:
     
     try:
         async with aiohttp.ClientSession() as session:
+            # Choose endpoint based on lazy_loading
+            endpoint = "/tools/base" if lazy_loading else "/tools/enabled"
+            
             async with session.get(
-                f"{tools_api_url}/tools/enabled",
+                f"{tools_api_url}{endpoint}",
                 timeout=aiohttp.ClientTimeout(total=5)
             ) as resp:
                 if resp.status == 200:
@@ -282,7 +288,8 @@ async def get_tool_definitions(source: str = "bot") -> list:
                     
                     _tools_cache[cache_key] = tools
                     _tools_cache_time = now
-                    agent_logger.debug(f"Loaded {len(tools)} tools for source={source}")
+                    mode = "base (lazy)" if lazy_loading else "all"
+                    agent_logger.debug(f"Loaded {len(tools)} {mode} tools for source={source}")
                     return tools
                 else:
                     agent_logger.error(f"Tools API error: {resp.status}")
@@ -417,11 +424,18 @@ async def run_agent(
     iteration = 0
     
     # Get tool definitions from API (filtered by source)
-    tool_definitions = await get_tool_definitions(source)
+    # Use lazy loading by default - agent gets base tools + search_tools
+    # Agent can discover and load more tools dynamically
+    use_lazy_loading = os.getenv("LAZY_TOOL_LOADING", "true").lower() == "true"
+    tool_definitions = await get_tool_definitions(source, lazy_loading=use_lazy_loading)
     
     # Filter tools based on session type permissions
     tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source)
-    agent_logger.info(f"Available tools for {chat_type}/{source}: {len(tool_definitions)}")
+    
+    # Track dynamically loaded tools for this session
+    dynamic_tools = []
+    
+    agent_logger.info(f"Available tools for {chat_type}/{source}: {len(tool_definitions)} (lazy={use_lazy_loading})")
     
     while iteration < CONFIG.max_iterations:
         iteration += 1
@@ -489,6 +503,19 @@ async def run_agent(
                 tool_result = await execute_tool(name, args, tool_ctx)
                 
                 agent_logger.info(f"[iter {iteration}] TOOL RESULT: success={tool_result.success}, output={len(tool_result.output or '')} chars, error={tool_result.error or 'none'}")
+                
+                # Handle dynamic tool loading
+                if name == "load_tools" and tool_result.success and tool_result.metadata:
+                    loaded = tool_result.metadata.get("loaded_tools", [])
+                    if loaded:
+                        # Add newly loaded tools to available definitions
+                        for new_tool in loaded:
+                            tool_name = new_tool.get("function", {}).get("name")
+                            # Avoid duplicates
+                            if tool_name and not any(t.get("function", {}).get("name") == tool_name for t in tool_definitions):
+                                tool_definitions.append(new_tool)
+                                dynamic_tools.append(tool_name)
+                                agent_logger.info(f"[iter {iteration}] Dynamically loaded tool: {tool_name}")
                 
                 # Track blocked commands
                 if not tool_result.success and "BLOCKED" in (tool_result.error or ""):

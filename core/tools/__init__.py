@@ -295,6 +295,87 @@ from tools.telegram import (
 )
 
 
+# Tool discovery - for lazy loading
+async def tool_search_tools(args: dict, ctx: ToolContext) -> ToolResult:
+    """Search available tools by name or description"""
+    import aiohttp
+    
+    query = args.get("query", "")
+    source = args.get("source", "all")
+    limit = args.get("limit", 10)
+    
+    tools_api_url = os.getenv("TOOLS_API_URL", "http://tools-api:8100")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{tools_api_url}/tools/search",
+                params={"query": query, "source": source, "limit": limit}
+            ) as resp:
+                data = await resp.json()
+        
+        tools = data.get("tools", [])
+        total = data.get("total_available", 0)
+        
+        if not tools:
+            return ToolResult(True, output=f"No tools found for '{query}'. Total available: {total}")
+        
+        lines = [f"## Found {len(tools)} tools (of {total} total)\n"]
+        
+        for tool in tools:
+            score = tool.get("score", 0)
+            source_tag = f"[{tool.get('source', 'builtin')}]" if tool.get('source') != 'builtin' else ""
+            lines.append(f"• **{tool['name']}** {source_tag}")
+            lines.append(f"  {tool.get('description', 'No description')[:100]}")
+            if score > 0:
+                lines.append(f"  _relevance: {score}_")
+            lines.append("")
+        
+        lines.append("\n💡 Use `load_tools` to add these to your current session.")
+        
+        return ToolResult(True, output="\n".join(lines))
+    except Exception as e:
+        return ToolResult(False, error=f"Failed to search tools: {e}")
+
+
+async def tool_load_tools(args: dict, ctx: ToolContext) -> ToolResult:
+    """Load additional tools by name into current session"""
+    import aiohttp
+    
+    names = args.get("names", [])
+    if isinstance(names, str):
+        names = [n.strip() for n in names.split(",")]
+    
+    if not names:
+        return ToolResult(False, error="Provide tool names to load")
+    
+    tools_api_url = os.getenv("TOOLS_API_URL", "http://tools-api:8100")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{tools_api_url}/tools/load",
+                json=names
+            ) as resp:
+                data = await resp.json()
+        
+        loaded = data.get("tools", [])
+        not_found = data.get("not_found", [])
+        
+        if loaded:
+            # Store loaded tools in context for this session
+            # The agent will pick these up on next iteration
+            loaded_names = [t["function"]["name"] for t in loaded]
+            output = f"✅ Loaded {len(loaded)} tools: {', '.join(loaded_names)}"
+            if not_found:
+                output += f"\n⚠️ Not found: {', '.join(not_found)}"
+            return ToolResult(True, output=output, metadata={"loaded_tools": loaded})
+        else:
+            return ToolResult(False, error=f"No tools loaded. Not found: {', '.join(not_found)}")
+    except Exception as e:
+        return ToolResult(False, error=f"Failed to load tools: {e}")
+
+
 # Skill management tools
 async def tool_install_skill(args: dict, ctx: ToolContext) -> ToolResult:
     """Install a skill from Anthropic's repository"""
@@ -386,6 +467,10 @@ TOOL_EXECUTORS = {
     "send_dm": tool_send_dm,
     "manage_message": tool_manage_message,
     "ask_user": tool_ask_user,
+    # Tool discovery (lazy loading)
+    "search_tools": tool_search_tools,
+    "load_tools": tool_load_tools,
+    # Skill management
     "install_skill": tool_install_skill,
     "list_skills": tool_list_skills,
     # Telegram userbot tools

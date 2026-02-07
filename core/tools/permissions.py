@@ -54,6 +54,8 @@ DEFAULT_PERMISSIONS = {
             "list_directory",
             "memory",
             "manage_tasks",
+            "search_tools",   # Can discover tools
+            "load_tools",     # Can load tools dynamically
             "install_skill",
             "list_skills",
         ],
