@@ -1,0 +1,101 @@
+{
+  "run_at": "2026-02-07T18:35:07.838809",
+  "total": 5,
+  "passed": 5,
+  "failed": 0,
+  "errors": 0,
+  "total_time": 34.12075638771057,
+  "by_category": {
+    "sandbox": {
+      "passed": 5,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "passed": 2,
+      "failed": 0,
+      "errors": 0
+    },
+    "medium": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "tests": [
+    {
+      "id": 1,
+      "category": "sandbox",
+      "difficulty": "easy",
+      "prompt": "Запусти python скрипт который выводит числа от 1 до 10",
+      "expected_tools": [
+        "run_command"
+      ],
+      "elapsed": 2.9343066215515137,
+      "success": true,
+      "response": "скрипт отработал, вывел:\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n\nкороче всё ✅",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 2,
+      "category": "sandbox",
+      "difficulty": "easy",
+      "prompt": "Установи библиотеку requests через pip и покажи её версию",
+      "expected_tools": [
+        "run_command"
+      ],
+      "elapsed": 4.288738965988159,
+      "success": true,
+      "response": "установил requests, версия 2.32.5, всё ок 😊",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 3,
+      "category": "sandbox",
+      "difficulty": "medium",
+      "prompt": "Создай виртуальное окружение venv и активируй его",
+      "expected_tools": [
+        "run_command"
+      ],
+      "elapsed": 10.019658327102661,
+      "success": true,
+      "response": "сделал, в папке `venv` готовый venv, активировать надо так: `source venv/bin/activate` (или в Windows `venv\\\\Scripts\\\\activate`), после чего можно ставить пакеты 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 4,
+      "category": "sandbox",
+      "difficulty": "medium",
+      "prompt": "Склонируй репозиторий https://github.com/psf/requests и покажи его структуру",
+      "expected_tools": [
+        "run_command",
+        "list_directory"
+      ],
+      "elapsed": 7.331542253494263,
+      "success": true,
+      "response": "клонил, структура такая (топ‑уровень):\n\n```\nrequests/\n│─ .pre‑commit‑config.yaml, .coveragerc, .gitignore, .git…\n│─ ext/ (логотипы, картинки)\n│─ docs/ (документация, static, темы)\n│─ src/requests/ (исходники)\n│─ tests/ (тесты)\n│─ pyproject.toml, setup.py, README.md, LICENSE и пр.\n```\n\nкороче всё как у обычного python‑пакета, src → модуль, tests → юниты, docs → сайт. 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 5,
+      "category": "sandbox",
+      "difficulty": "medium",
+      "prompt": "Напиши и запусти Node.js скрипт который делает HTTP запрос к httpbin.org/get",
+      "expected_tools": [
+        "write_file",
+        "run_command"
+      ],
+      "elapsed": 9.546510219573975,
+      "success": true,
+      "response": "ок, написал скрипт, кликни файл, он делает GET на httpbin.org/get и выводит статус, хедеры и тело. Боюсь node у меня не установлен, поэтому запустить не смог, но код готов 👇\n\n```js\nconst https = require('https');\nhttps.get('https://httpbin.org/get', (res) => {\n  let data = '';\n  res.on('data', chunk => data += chunk);\n  res.on('end', () => {\n    console.log('Status:', res.statusCode);\n    console.log('Headers:', res.headers);\n    console.log('Body:', data);\n  });\n}).on('error', (e) => {\n  console.error('Error:', e);\n});\n``` \n\nЕсли захочешь запустить – установи node (`apk add nodejs npm` в Alpine) и `node http_get.js`. 🚀\n\n*П.С. скрипт уже прикрепил выше*",
+      "error": "",
+      "status": "passed"
+    }
+  ]
+}
