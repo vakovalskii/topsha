@@ -156,18 +156,18 @@ SHARED_TOOLS = {
     "schedule_task": {
         "enabled": True,
         "name": "schedule_task",
-        "description": "Schedule tasks via scheduler service. Actions: 'add' - create task, 'list' - show tasks, 'cancel' - remove task, 'run' - execute immediately. Tasks persist across restarts.",
+        "description": "Schedule recurring or delayed tasks. IMPORTANT: 'content' is a TEXT PROMPT (not code!) that will be sent to the agent. Example: content='Найди курс доллара и отправь в ЛС'. The agent will execute this prompt with all its tools.",
         "source": "builtin",
         "parameters": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["add", "list", "cancel", "run"], "description": "Action to perform"},
-                "type": {"type": "string", "enum": ["message", "agent"], "description": "Task type: 'message' sends reminder, 'agent' runs agent with content"},
-                "content": {"type": "string", "description": "Task content/message"},
-                "delay_minutes": {"type": "integer", "description": "Delay before first execution (default: 1)"},
-                "recurring": {"type": "boolean", "description": "Repeat task after execution"},
-                "interval_minutes": {"type": "integer", "description": "Repeat interval in minutes"},
-                "task_id": {"type": "string", "description": "Task ID for cancel/run actions"}
+                "action": {"type": "string", "enum": ["add", "list", "cancel", "run"], "description": "add=create, list=show, cancel=remove, run=execute now"},
+                "type": {"type": "string", "enum": ["message", "agent"], "description": "'message'=send text reminder, 'agent'=run agent with prompt (can use tools)"},
+                "content": {"type": "string", "description": "TEXT PROMPT for agent (NOT code!). Example: 'Найди новости про X и отправь мне'"},
+                "delay_minutes": {"type": "integer", "description": "Minutes before first run (default: 1)"},
+                "recurring": {"type": "boolean", "description": "Repeat after execution?"},
+                "interval_minutes": {"type": "integer", "description": "Repeat interval in minutes (min: 1)"},
+                "task_id": {"type": "string", "description": "Task ID (for cancel/run)"}
             },
             "required": ["action"]
         }

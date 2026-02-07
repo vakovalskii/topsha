@@ -1,0 +1,392 @@
+{
+  "test_scenarios": [
+    {
+      "id": 1,
+      "category": "sandbox",
+      "prompt": "Запусти python скрипт который выводит числа от 1 до 10",
+      "expected_tools": ["run_command"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 2,
+      "category": "sandbox",
+      "prompt": "Установи библиотеку requests через pip и покажи её версию",
+      "expected_tools": ["run_command"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 3,
+      "category": "sandbox",
+      "prompt": "Создай виртуальное окружение venv и активируй его",
+      "expected_tools": ["run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 4,
+      "category": "sandbox",
+      "prompt": "Склонируй репозиторий https://github.com/psf/requests и покажи его структуру",
+      "expected_tools": ["run_command", "list_directory"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 5,
+      "category": "sandbox",
+      "prompt": "Напиши и запусти Node.js скрипт который делает HTTP запрос к httpbin.org/get",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 6,
+      "category": "file_ops",
+      "prompt": "Создай файл notes.txt с текстом 'Hello World' и прочитай его",
+      "expected_tools": ["write_file", "read_file"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 7,
+      "category": "file_ops",
+      "prompt": "Найди все .py файлы в текущей директории",
+      "expected_tools": ["search_files"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 8,
+      "category": "file_ops",
+      "prompt": "Создай структуру папок project/src/utils и файл main.py внутри src",
+      "expected_tools": ["run_command", "write_file"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 9,
+      "category": "file_ops",
+      "prompt": "Найди все файлы содержащие слово 'TODO' в текущей директории",
+      "expected_tools": ["search_text"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 10,
+      "category": "file_ops",
+      "prompt": "Отредактируй файл notes.txt - замени 'Hello' на 'Goodbye'",
+      "expected_tools": ["read_file", "edit_file"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 11,
+      "category": "web_search",
+      "prompt": "Найди в интернете текущий курс биткоина",
+      "expected_tools": ["search_web"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 12,
+      "category": "web_search",
+      "prompt": "Найди последние новости про искусственный интеллект",
+      "expected_tools": ["search_web"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 13,
+      "category": "web_search",
+      "prompt": "Найди документацию по FastAPI и сохрани основные моменты в файл",
+      "expected_tools": ["search_web", "fetch_page", "write_file"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 14,
+      "category": "web_search",
+      "prompt": "Скачай содержимое страницы https://example.com и сохрани в файл",
+      "expected_tools": ["fetch_page", "write_file"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 15,
+      "category": "web_search",
+      "prompt": "Найди рецепт борща и сохрани его в recipe.md",
+      "expected_tools": ["search_web", "fetch_page", "write_file"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 16,
+      "category": "scheduler",
+      "prompt": "Создай задачу которая каждые 5 минут проверяет курс доллара",
+      "expected_tools": ["schedule_task"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 17,
+      "category": "scheduler",
+      "prompt": "Напомни мне через 10 минут про встречу",
+      "expected_tools": ["schedule_task"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 18,
+      "category": "scheduler",
+      "prompt": "Покажи все запланированные задачи",
+      "expected_tools": ["schedule_task"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 19,
+      "category": "scheduler",
+      "prompt": "Создай ежечасную задачу для проверки доступности сайта google.com",
+      "expected_tools": ["schedule_task"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 20,
+      "category": "scheduler",
+      "prompt": "Отмени все запланированные задачи",
+      "expected_tools": ["schedule_task"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 21,
+      "category": "memory",
+      "prompt": "Запомни что мой любимый язык программирования - Python",
+      "expected_tools": ["memory"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 22,
+      "category": "memory",
+      "prompt": "Что ты помнишь обо мне?",
+      "expected_tools": ["memory"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 23,
+      "category": "memory",
+      "prompt": "Очисти всю память",
+      "expected_tools": ["memory"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 24,
+      "category": "tasks",
+      "prompt": "Создай список задач: 1) Изучить Docker 2) Написать тесты 3) Задеплоить приложение",
+      "expected_tools": ["manage_tasks"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 25,
+      "category": "tasks",
+      "prompt": "Покажи все мои задачи и отметь первую как выполненную",
+      "expected_tools": ["manage_tasks"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 26,
+      "category": "skills",
+      "prompt": "Покажи какие скиллы установлены",
+      "expected_tools": ["list_skills"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 27,
+      "category": "skills",
+      "prompt": "Установи скилл для создания презентаций (pptx)",
+      "expected_tools": ["install_skill"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 28,
+      "category": "skills",
+      "prompt": "Установи скилл для работы с Word документами",
+      "expected_tools": ["install_skill"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 29,
+      "category": "skills",
+      "prompt": "Какие скиллы доступны для установки?",
+      "expected_tools": ["list_skills"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 30,
+      "category": "presentation",
+      "prompt": "Создай презентацию из 3 слайдов про машинное обучение",
+      "expected_tools": ["read_file", "run_command", "write_file"],
+      "difficulty": "hard"
+    },
+    {
+      "id": 31,
+      "category": "presentation",
+      "prompt": "Создай презентацию про историю Python с картинками",
+      "expected_tools": ["search_web", "read_file", "run_command"],
+      "difficulty": "hard"
+    },
+    {
+      "id": 32,
+      "category": "analysis",
+      "prompt": "Проанализируй этот JSON файл и выведи статистику: {\"users\": [{\"name\": \"John\", \"age\": 25}, {\"name\": \"Jane\", \"age\": 30}]}",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 33,
+      "category": "analysis",
+      "prompt": "Создай CSV файл с данными о продажах и построй график",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "hard"
+    },
+    {
+      "id": 34,
+      "category": "analysis",
+      "prompt": "Посчитай количество строк кода во всех Python файлах",
+      "expected_tools": ["search_files", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 35,
+      "category": "analysis",
+      "prompt": "Найди самый большой файл в текущей директории",
+      "expected_tools": ["run_command", "list_directory"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 36,
+      "category": "docker",
+      "prompt": "Покажи запущенные Docker контейнеры",
+      "expected_tools": ["mcp:docker_ps"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 37,
+      "category": "docker",
+      "prompt": "Покажи логи контейнера core за последние 50 строк",
+      "expected_tools": ["mcp:docker_logs"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 38,
+      "category": "docker",
+      "prompt": "Какие Docker образы есть на сервере?",
+      "expected_tools": ["mcp:docker_images"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 39,
+      "category": "docker",
+      "prompt": "Перезапусти контейнер bot",
+      "expected_tools": ["mcp:docker_restart"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 40,
+      "category": "coding",
+      "prompt": "Напиши Python функцию для сортировки списка и протестируй её",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 41,
+      "category": "coding",
+      "prompt": "Создай простой REST API на Flask с одним эндпоинтом",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 42,
+      "category": "coding",
+      "prompt": "Напиши скрипт который парсит JSON из URL и сохраняет в файл",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 43,
+      "category": "coding",
+      "prompt": "Создай bash скрипт для бэкапа всех .txt файлов",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 44,
+      "category": "coding",
+      "prompt": "Напиши unit тесты для функции сложения двух чисел",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 45,
+      "category": "complex",
+      "prompt": "Найди в интернете погоду в Москве и создай задачу проверять её каждый час",
+      "expected_tools": ["search_web", "schedule_task"],
+      "difficulty": "hard"
+    },
+    {
+      "id": 46,
+      "category": "complex",
+      "prompt": "Склонируй репозиторий, найди все TODO комментарии и создай задачи для каждого",
+      "expected_tools": ["run_command", "search_text", "manage_tasks"],
+      "difficulty": "hard"
+    },
+    {
+      "id": 47,
+      "category": "complex",
+      "prompt": "Создай отчёт о системе: CPU, память, диск - и сохрани в system_report.md",
+      "expected_tools": ["run_command", "write_file"],
+      "difficulty": "medium"
+    },
+    {
+      "id": 48,
+      "category": "complex",
+      "prompt": "Напиши скрипт мониторинга который проверяет доступность списка сайтов",
+      "expected_tools": ["write_file", "run_command"],
+      "difficulty": "hard"
+    },
+    {
+      "id": 49,
+      "category": "tools",
+      "prompt": "Какие инструменты у тебя есть? Найди все связанные с Docker",
+      "expected_tools": ["search_tools"],
+      "difficulty": "easy"
+    },
+    {
+      "id": 50,
+      "category": "tools",
+      "prompt": "Покажи все доступные MCP инструменты",
+      "expected_tools": ["search_tools"],
+      "difficulty": "easy"
+    }
+  ],
+  "categories": {
+    "sandbox": "Выполнение команд в изолированном окружении",
+    "file_ops": "Операции с файлами и директориями",
+    "web_search": "Поиск информации в интернете",
+    "scheduler": "Планирование и отложенные задачи",
+    "memory": "Долгосрочная память агента",
+    "tasks": "Управление списком задач",
+    "skills": "Установка и использование скиллов",
+    "presentation": "Создание презентаций (требует pptx skill)",
+    "analysis": "Анализ данных и файлов",
+    "docker": "Управление Docker через MCP",
+    "coding": "Написание и выполнение кода",
+    "complex": "Комплексные сценарии с несколькими инструментами",
+    "tools": "Поиск и управление инструментами"
+  },
+  "statistics": {
+    "total": 50,
+    "by_difficulty": {
+      "easy": 24,
+      "medium": 19,
+      "hard": 7
+    },
+    "by_category": {
+      "sandbox": 5,
+      "file_ops": 5,
+      "web_search": 5,
+      "scheduler": 5,
+      "memory": 3,
+      "tasks": 2,
+      "skills": 4,
+      "presentation": 2,
+      "analysis": 4,
+      "docker": 4,
+      "coding": 5,
+      "complex": 4,
+      "tools": 2
+    }
+  }
+}
