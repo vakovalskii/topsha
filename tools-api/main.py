@@ -230,6 +230,34 @@ SHARED_TOOLS = {
             },
             "required": []
         }
+    },
+    # Skill management
+    "install_skill": {
+        "enabled": True,
+        "name": "install_skill",
+        "description": "Install a skill from Anthropic's skills repository. Skills add capabilities like creating presentations, documents, etc.",
+        "source": "builtin",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Skill name (e.g. 'pptx', 'docx', 'xlsx')"},
+                "source": {"type": "string", "enum": ["anthropic", "url"], "description": "Source: 'anthropic' for official skills, 'url' for custom"}
+            },
+            "required": ["name"]
+        }
+    },
+    "list_skills": {
+        "enabled": True,
+        "name": "list_skills",
+        "description": "List available and installed skills.",
+        "source": "builtin",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "installed_only": {"type": "boolean", "description": "Show only installed skills"}
+            },
+            "required": []
+        }
     }
 }
 
@@ -460,12 +488,38 @@ class SkillsManager:
         return {name: tool for name, tool in self.skill_tools.items() if tool.get("enabled", True)}
     
     def get_system_prompts(self) -> List[str]:
-        """Get all system prompts from enabled skills"""
+        """Get all system prompts from enabled skills - FULL VERSION (deprecated)"""
         prompts = []
         for skill in self.skills.values():
             if skill.enabled and skill.system_prompt:
                 prompts.append(f"# Skill: {skill.name}\n{skill.system_prompt}")
         return prompts
+    
+    def get_skill_mentions(self) -> str:
+        """Get skill mentions for system prompt (name + description only)
+        
+        Agent should use list_directory/read_file to load full instructions when needed.
+        Skills are available at /data/skills/{name}/ or user workspace /workspace/{user_id}/skills/
+        """
+        if not self.skills:
+            return ""
+        
+        lines = ["## Available Skills", ""]
+        lines.append("When user requests something that matches a skill, load its instructions:")
+        lines.append("1. `list_directory` on `/data/skills/{skill_name}/`")
+        lines.append("2. `read_file` the SKILL.md or relevant .md files")
+        lines.append("3. Follow the loaded instructions")
+        lines.append("")
+        lines.append("| Skill | Description |")
+        lines.append("|-------|-------------|")
+        
+        for skill in self.skills.values():
+            if skill.enabled:
+                # Truncate description to ~80 chars
+                desc = skill.description[:80] + "..." if len(skill.description) > 80 else skill.description
+                lines.append(f"| `{skill.name}` | {desc} |")
+        
+        return "\n".join(lines)
 
 
 # Global skills manager
@@ -915,6 +969,86 @@ async def list_skills(user_id: Optional[str] = None):
     }
 
 
+@app.get("/skills/mentions")
+async def get_skill_mentions_endpoint(user_id: Optional[str] = None):
+    """Get skill mentions for system prompt (name + description only)
+    
+    This is the preferred way to include skills in system prompt.
+    Agent loads full instructions on-demand via read_file.
+    """
+    skills_manager.scan_all(user_id)
+    mentions = skills_manager.get_skill_mentions()
+    
+    return {
+        "mentions": mentions,
+        "skill_count": len(skills_manager.skills)
+    }
+
+
+@app.get("/skills/prompts/all")
+async def get_all_skill_prompts_endpoint(user_id: Optional[str] = None):
+    """Get all system prompts from enabled skills (DEPRECATED - use /skills/mentions)"""
+    skills_manager.scan_all(user_id)
+    prompts = skills_manager.get_system_prompts()
+    
+    return {
+        "prompts": prompts,
+        "count": len(prompts)
+    }
+
+
+@app.get("/skills/scan")
+async def scan_skills_endpoint(user_id: Optional[str] = None):
+    """Force rescan of all skills"""
+    skills_manager.scan_all(user_id)
+    
+    return {
+        "success": True,
+        "skills_found": len(skills_manager.skills),
+        "tools_loaded": len(skills_manager.skill_tools),
+        "last_scan": skills_manager.last_scan.isoformat() if skills_manager.last_scan else None
+    }
+
+
+# Available skills from Anthropic's repository
+ANTHROPIC_SKILLS = {
+    "pptx": "Create PowerPoint presentations",
+    "docx": "Create and edit Word documents", 
+    "xlsx": "Work with Excel spreadsheets",
+    "pdf": "Work with PDF files",
+    "canvas-design": "Create visual designs",
+    "frontend-design": "Frontend UI/UX design",
+    "webapp-testing": "Test web applications",
+    "mcp-builder": "Build MCP servers",
+    "skill-creator": "Create new skills",
+    "algorithmic-art": "Generate algorithmic art",
+    "brand-guidelines": "Create brand guidelines",
+    "doc-coauthoring": "Collaborative document editing",
+    "internal-comms": "Internal communications",
+    "slack-gif-creator": "Create Slack GIFs",
+    "theme-factory": "Create themes",
+    "web-artifacts-builder": "Build web artifacts"
+}
+
+
+@app.get("/skills/available")
+async def list_available_skills_endpoint():
+    """List skills available for installation from Anthropic"""
+    skills_manager.scan_all()
+    installed = {s.name for s in skills_manager.skills.values()}
+    
+    available = []
+    for name, desc in ANTHROPIC_SKILLS.items():
+        available.append({
+            "name": name,
+            "description": desc,
+            "installed": name in installed,
+            "source": "anthropic"
+        })
+    
+    return {"available": available, "count": len(available)}
+
+
 @app.get("/skills/{name}")
 async def get_skill(name: str, user_id: Optional[str] = None):
     """Get skill details"""
@@ -933,19 +1067,6 @@ async def get_skill(name: str, user_id: Optional[str] = None):
     }
 
 
-@app.post("/skills/scan")
-async def scan_skills(user_id: Optional[str] = None):
-    """Force rescan of all skills"""
-    skills_manager.scan_all(user_id)
-    
-    return {
-        "success": True,
-        "skills_found": len(skills_manager.skills),
-        "tools_loaded": len(skills_manager.skill_tools),
-        "last_scan": skills_manager.last_scan.isoformat() if skills_manager.last_scan else None
-    }
-
-
 @app.get("/skills/{name}/prompt")
 async def get_skill_prompt(name: str, user_id: Optional[str] = None):
     """Get system prompt from a skill"""
@@ -958,18 +1079,6 @@ async def get_skill_prompt(name: str, user_id: Optional[str] = None):
     return {
         "name": skill.name,
         "system_prompt": skill.system_prompt
-    }
-
-
-@app.get("/skills/prompts/all")
-async def get_all_skill_prompts(user_id: Optional[str] = None):
-    """Get all system prompts from enabled skills"""
-    skills_manager.scan_all(user_id)
-    prompts = skills_manager.get_system_prompts()
-    
-    return {
-        "prompts": prompts,
-        "count": len(prompts)
     }
 
 
@@ -991,6 +1100,128 @@ async def toggle_skill(name: str, data: SkillToggle, user_id: Optional[str] = No
     skills_manager.save_cache()
     
     return {"success": True, "name": name, "enabled": data.enabled}
+
+
+# ============ SKILL INSTALLATION ============
+
+class SkillInstall(BaseModel):
+    name: str
+    source: str = "anthropic"
+
+
+@app.post("/skills/install")
+async def install_skill(data: SkillInstall):
+    """Install a skill from Anthropic's repository
+    
+    Downloads skill files from github.com/anthropics/skills
+    """
+    import subprocess
+    import shutil
+    
+    name = data.name.lower()
+    
+    if data.source == "anthropic":
+        if name not in ANTHROPIC_SKILLS:
+            raise HTTPException(400, f"Unknown skill: {name}. Available: {list(ANTHROPIC_SKILLS.keys())}")
+        
+        skill_dir = os.path.join(SHARED_SKILLS_DIR, name)
+        
+        # Check if already installed
+        if os.path.exists(skill_dir):
+            return {"success": True, "name": name, "message": "Already installed", "path": skill_dir}
+        
+        # Clone to temp and copy skill
+        try:
+            temp_dir = f"/tmp/anthropic-skills-{name}"
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+            
+            # Sparse checkout just the skill we need
+            result = subprocess.run([
+                "git", "clone", "--depth", "1", "--filter=blob:none", "--sparse",
+                "https://github.com/anthropics/skills.git", temp_dir
+            ], capture_output=True, text=True, timeout=60)
+            
+            if result.returncode != 0:
+                raise HTTPException(500, f"Git clone failed: {result.stderr}")
+            
+            # Set sparse checkout
+            subprocess.run([
+                "git", "-C", temp_dir, "sparse-checkout", "set", f"skills/{name}"
+            ], capture_output=True, text=True, timeout=30)
+            
+            # Copy skill to shared directory
+            src = os.path.join(temp_dir, "skills", name)
+            if not os.path.exists(src):
+                raise HTTPException(404, f"Skill {name} not found in repository")
+            
+            os.makedirs(SHARED_SKILLS_DIR, exist_ok=True)
+            shutil.copytree(src, skill_dir)
+            
+            # Create skill.json if only SKILL.md exists
+            skill_json = os.path.join(skill_dir, "skill.json")
+            skill_md = os.path.join(skill_dir, "SKILL.md")
+            
+            if os.path.exists(skill_md) and not os.path.exists(skill_json):
+                # Parse SKILL.md frontmatter for description
+                with open(skill_md) as f:
+                    content = f.read()
+                
+                desc = ANTHROPIC_SKILLS.get(name, "")
+                if "description:" in content:
+                    import re
+                    match = re.search(r'description:\s*["\']?([^"\'\n]+)', content)
+                    if match:
+                        desc = match.group(1).strip()
+                
+                skill_config = {
+                    "name": name,
+                    "description": desc[:200],
+                    "version": "1.0.0",
+                    "author": "Anthropic",
+                    "tools": [],
+                    "system_prompt_file": "SKILL.md",
+                    "enabled": True
+                }
+                
+                with open(skill_json, 'w') as f:
+                    json.dump(skill_config, f, indent=2)
+            
+            # Cleanup
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            
+            # Rescan skills
+            skills_manager.scan_all()
+            
+            return {
+                "success": True,
+                "name": name,
+                "message": f"Installed skill '{name}'",
+                "path": skill_dir
+            }
+            
+        except subprocess.TimeoutExpired:
+            raise HTTPException(500, "Installation timed out")
+        except Exception as e:
+            raise HTTPException(500, f"Installation failed: {str(e)}")
+    
+    raise HTTPException(400, f"Unknown source: {data.source}")
+
+
+@app.delete("/skills/install/{name}")
+async def uninstall_skill(name: str):
+    """Uninstall a skill"""
+    import shutil
+    
+    skill_dir = os.path.join(SHARED_SKILLS_DIR, name)
+    
+    if not os.path.exists(skill_dir):
+        raise HTTPException(404, f"Skill {name} not installed")
+    
+    shutil.rmtree(skill_dir)
+    skills_manager.scan_all()
+    
+    return {"success": True, "name": name, "message": f"Uninstalled skill '{name}'"}
 
 
 # ============ STARTUP ============

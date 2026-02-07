@@ -54,6 +54,8 @@ DEFAULT_PERMISSIONS = {
             "list_directory",
             "memory",
             "manage_tasks",
+            "install_skill",
+            "list_skills",
         ],
         "description": "Minimal tools for sandboxed sessions"
     },

@@ -290,6 +290,78 @@ from tools.ask_user import tool_ask_user
 from tools.permissions import check_tool_permission, filter_tools_for_session
 
 
+# Skill management tools
+async def tool_install_skill(args: dict, ctx: ToolContext) -> ToolResult:
+    """Install a skill from Anthropic's repository"""
+    import aiohttp
+    
+    name = args.get("name", "").lower()
+    source = args.get("source", "anthropic")
+    
+    if not name:
+        return ToolResult(False, error="Skill name required")
+    
+    tools_api_url = os.getenv("TOOLS_API_URL", "http://tools-api:8100")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{tools_api_url}/skills/install",
+                json={"name": name, "source": source},
+                timeout=aiohttp.ClientTimeout(total=120)
+            ) as resp:
+                data = await resp.json()
+                if resp.status == 200:
+                    return ToolResult(True, output=f"✅ {data.get('message', 'Installed')}\nPath: {data.get('path', '')}")
+                else:
+                    return ToolResult(False, error=data.get("detail", "Installation failed"))
+    except Exception as e:
+        return ToolResult(False, error=f"Failed to install skill: {e}")
+
+
+async def tool_list_skills(args: dict, ctx: ToolContext) -> ToolResult:
+    """List available and installed skills"""
+    import aiohttp
+    
+    installed_only = args.get("installed_only", False)
+    tools_api_url = os.getenv("TOOLS_API_URL", "http://tools-api:8100")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Get installed skills
+            async with session.get(f"{tools_api_url}/skills") as resp:
+                installed_data = await resp.json()
+            
+            # Get available skills
+            async with session.get(f"{tools_api_url}/skills/available") as resp:
+                available_data = await resp.json()
+        
+        lines = ["## Skills\n"]
+        
+        if not installed_only:
+            lines.append("### Available for Installation")
+            lines.append("| Skill | Description | Status |")
+            lines.append("|-------|-------------|--------|")
+            for skill in available_data.get("available", []):
+                status = "✅ Installed" if skill["installed"] else "📦 Available"
+                lines.append(f"| `{skill['name']}` | {skill['description'][:50]}... | {status} |")
+            lines.append("")
+        
+        lines.append("### Installed Skills")
+        installed = installed_data.get("skills", [])
+        if installed:
+            lines.append("| Skill | Description | Path |")
+            lines.append("|-------|-------------|------|")
+            for skill in installed:
+                lines.append(f"| `{skill['name']}` | {skill['description'][:40]}... | `{skill.get('path', '')}` |")
+        else:
+            lines.append("No skills installed yet. Use `install_skill` to add some!")
+        
+        return ToolResult(True, output="\n".join(lines))
+    except Exception as e:
+        return ToolResult(False, error=f"Failed to list skills: {e}")
+
+
 # Tool registry
 TOOL_EXECUTORS = {
     "run_command": tool_run_command,
@@ -309,6 +381,8 @@ TOOL_EXECUTORS = {
     "send_dm": tool_send_dm,
     "manage_message": tool_manage_message,
     "ask_user": tool_ask_user,
+    "install_skill": tool_install_skill,
+    "list_skills": tool_list_skills,
 }
 
 

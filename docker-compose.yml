@@ -48,6 +48,25 @@ services:
           cpus: '0.3'
           memory: 192M
 
+  # ============ MCP TEST SERVER ============
+  mcp-test:
+    build: ./mcp-test
+    container_name: mcp-test
+    restart: unless-stopped
+    networks:
+      - agent-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
   # ============ CORE - Agent + Tools + HTTP API ============
   core:
     build: ./core
@@ -75,6 +94,7 @@ services:
       - gdrive_client_secret
     volumes:
       - ./workspace:/workspace
+      - ./workspace/_shared:/data:ro  # Skills and shared data (read-only)
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - agent-net

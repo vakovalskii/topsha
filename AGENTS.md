@@ -20,7 +20,7 @@ Telegram бот с ReAct агентом, который даёт пользов�
 
 ### Architecture
 
-\`\`\`
+```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Gateway   │────▶│    Proxy    │────▶│  External   │
 │  (Bot+Agent)│     │ (API Keys)  │     │    APIs     │
@@ -33,13 +33,13 @@ Telegram бот с ReAct агентом, который даёт пользов�
 │  per-user   │
 │  isolated   │
 └─────────────┘
-\`\`\`
+```
 
 ## Evolution Cycle
 
 When monitoring and patching the system:
 
-\`\`\`
+```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    EVOLUTION CYCLE                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -68,22 +68,22 @@ When monitoring and patching the system:
 │  6. REPEAT                                                      │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
-\`\`\`
+```
 
 ## Key Files for Patching
 
 | File | What to patch |
 |------|---------------|
-| \`core/src/approvals/blocked-patterns.json\` | 247 security patterns |
-| \`bot/prompt-injection-patterns.json\` | 19 injection patterns |
-| \`core/tools/permissions.py\` | Tool allowlist/denylist |
-| \`bot/access.py\` | DM Policy (pairing/allowlist) |
-| \`core/src/agent/system.txt\` | System prompt |
-| \`scripts/doctor.py\` | Security audit CLI |
+| `core/src/approvals/blocked-patterns.json` | 247 security patterns |
+| `bot/prompt-injection-patterns.json` | 19 injection patterns |
+| `core/tools/permissions.py` | Tool allowlist/denylist |
+| `bot/access.py` | DM Policy (pairing/allowlist) |
+| `core/src/agent/system.txt` | System prompt |
+| `scripts/doctor.py` | Security audit CLI |
 
 ## Access Control Commands
 
-\`\`\`bash
+```bash
 # Show access status (admin only)
 /access
 
@@ -91,7 +91,7 @@ When monitoring and patching the system:
 /access_mode admin      # Only admin
 /access_mode allowlist  # Admin + allowed users
 /access_mode pairing    # Pairing codes for approval
-/access_mode public     # Anyone (risky)
+/access_mode public     # Anyone (⚠️ risky)
 
 # Approve pairing code
 /approve ABC123
@@ -101,11 +101,11 @@ When monitoring and patching the system:
 
 # Add to allowlist
 /allow 123456789
-\`\`\`
+```
 
 ## Security Audit
 
-\`\`\`bash
+```bash
 # Run security doctor
 python scripts/doctor.py
 
@@ -121,7 +121,7 @@ python scripts/doctor.py --json
 # - File permissions
 # - Access mode
 # - Resource limits
-\`\`\`
+```
 
 ## Tool Permissions by Session Type
 
@@ -134,7 +134,7 @@ python scripts/doctor.py --json
 
 ## Monitoring Commands
 
-\`\`\`bash
+```bash
 # Security audit
 python scripts/doctor.py
 
@@ -152,21 +152,21 @@ cat workspace/_shared/CHAT_HISTORY.md | tail -100
 
 # View pairing codes (admin)
 cat workspace/_shared/pairing.json
-\`\`\`
+```
 
 ## Troubleshooting
 
 ### Server Down
 
-1. \`docker ps\` - all containers should be Up
-2. \`docker logs gateway\` - check errors
-3. \`python scripts/doctor.py\` - security audit
+1. `docker ps` - all containers should be Up
+2. `docker logs gateway` - check errors
+3. `python scripts/doctor.py` - security audit
 4. If OOM - increase memory limit in docker-compose.yml
-5. If rate limit - increase intervals in \`src/config.ts\`
+5. If rate limit - increase intervals in `src/config.ts`
 
 ### Attack Detected
 
-1. Check logs for \`[SECURITY]\` or \`[BLOCKED]\` tags
+1. Check logs for `[SECURITY]` or `[BLOCKED]` tags
 2. Identify the attack pattern
 3. Add to blocked-patterns.json or prompt-injection-patterns.json
 4. Rebuild and deploy
@@ -174,7 +174,7 @@ cat workspace/_shared/pairing.json
 
 ## Centralized Config
 
-All settings in \`src/config.ts\`:
+All settings in `src/config.ts`:
 - Rate limits, timeouts, agent behavior
 - Reactions, thoughts, messages
 - Storage limits (chat history, memory)
@@ -184,12 +184,12 @@ All settings in \`src/config.ts\`:
 
 | Feature | LocalTopSH | OpenClaw |
 |---------|------------|----------|
-| DM Policy | admin/allowlist/public/pairing | pairing/allowlist/open |
-| Sandbox | Docker per-user | Docker per-session |
+| DM Policy | ✅ admin/allowlist/public/pairing | ✅ pairing/allowlist/open |
+| Sandbox | ✅ Docker per-user | ✅ Docker per-session |
 | Blocked Patterns | 247 | ~200 |
 | Prompt Injection | 19 patterns | ~20 patterns |
-| Tool Permissions | by session type | similar |
-| Security Audit CLI | \`python scripts/doctor.py\` | \`openclaw doctor\` |
+| Tool Permissions | ✅ by session type | ✅ similar |
+| Security Audit CLI | ✅ `python scripts/doctor.py` | ✅ `openclaw doctor` |
 | Multi-channel | Telegram only | 12+ channels |
-| Admin Panel | React :3000 | Control UI |
+| Admin Panel | ✅ React :3000 | ✅ Control UI |
 | **Philosophy** | Own API keys | Subscription abuse |
