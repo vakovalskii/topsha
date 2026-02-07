@@ -349,6 +349,141 @@
       "prompt": "Покажи все доступные MCP инструменты",
       "expected_tools": ["search_tools"],
       "difficulty": "easy"
+    },
+    {
+      "id": 51,
+      "category": "telegram",
+      "prompt": "Прочитай последние 3 поста из канала @NeuralShit",
+      "expected_tools": ["telegram_channel"],
+      "difficulty": "easy",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 52,
+      "category": "telegram",
+      "prompt": "Подпишись на канал https://t.me/durov",
+      "expected_tools": ["telegram_join"],
+      "difficulty": "easy",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 53,
+      "category": "telegram",
+      "prompt": "Покажи мои последние диалоги",
+      "expected_tools": ["telegram_dialogs"],
+      "difficulty": "easy",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 54,
+      "category": "telegram",
+      "prompt": "Отправь сообщение 'Привет!' пользователю @durov",
+      "expected_tools": ["telegram_send"],
+      "difficulty": "medium",
+      "source": "userbot",
+      "note": "Требует userbot, осторожно со спамом"
+    },
+    {
+      "id": 55,
+      "category": "telegram",
+      "prompt": "Покажи историю сообщений в текущем чате",
+      "expected_tools": ["telegram_history"],
+      "difficulty": "easy",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 56,
+      "category": "telegram",
+      "prompt": "Найди последние новости в канале @raboravno и перескажи",
+      "expected_tools": ["telegram_channel"],
+      "difficulty": "medium",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 57,
+      "category": "telegram",
+      "prompt": "Прочитай что пишут в @habr_com за последний час",
+      "expected_tools": ["telegram_channel"],
+      "difficulty": "medium",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 58,
+      "category": "telegram",
+      "prompt": "Напиши в личку @username что я буду через 10 минут",
+      "expected_tools": ["telegram_send"],
+      "difficulty": "medium",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 59,
+      "category": "telegram",
+      "prompt": "Создай задачу каждый час проверять канал @cryptonews и присылать мне дайджест",
+      "expected_tools": ["schedule_task", "telegram_channel"],
+      "difficulty": "hard",
+      "source": "userbot",
+      "note": "Требует userbot + scheduler"
+    },
+    {
+      "id": 60,
+      "category": "telegram",
+      "prompt": "Найди все каналы про AI в моих подписках",
+      "expected_tools": ["telegram_dialogs"],
+      "difficulty": "medium",
+      "source": "userbot",
+      "note": "Требует userbot"
+    },
+    {
+      "id": 61,
+      "category": "telegram_bot",
+      "prompt": "Отправь мне файл notes.txt в личку",
+      "expected_tools": ["send_file"],
+      "difficulty": "easy",
+      "source": "bot",
+      "note": "Работает через бота"
+    },
+    {
+      "id": 62,
+      "category": "telegram_bot",
+      "prompt": "Напиши мне в ЛС 'Привет, это тест!'",
+      "expected_tools": ["send_dm"],
+      "difficulty": "easy",
+      "source": "bot",
+      "note": "Работает через бота"
+    },
+    {
+      "id": 63,
+      "category": "telegram_bot",
+      "prompt": "Удали своё последнее сообщение",
+      "expected_tools": ["manage_message"],
+      "difficulty": "easy",
+      "source": "bot",
+      "note": "Работает через бота"
+    },
+    {
+      "id": 64,
+      "category": "telegram_complex",
+      "prompt": "Найди в интернете курс доллара, потом проверь что пишут в @bankiru и сравни данные",
+      "expected_tools": ["search_web", "telegram_channel"],
+      "difficulty": "hard",
+      "source": "userbot",
+      "note": "Комплексный тест web + telegram"
+    },
+    {
+      "id": 65,
+      "category": "telegram_complex",
+      "prompt": "Прочитай последний пост из @NeuralShit, сохрани его в файл и отправь мне",
+      "expected_tools": ["telegram_channel", "write_file", "send_file"],
+      "difficulty": "hard",
+      "source": "userbot",
+      "note": "Комплексный тест telegram + файлы"
     }
   ],
   "categories": {
@@ -364,14 +499,17 @@
     "docker": "Управление Docker через MCP",
     "coding": "Написание и выполнение кода",
     "complex": "Комплексные сценарии с несколькими инструментами",
-    "tools": "Поиск и управление инструментами"
+    "tools": "Поиск и управление инструментами",
+    "telegram": "Работа с Telegram через userbot (чтение каналов, подписки, сообщения)",
+    "telegram_bot": "Telegram функции через бота (отправка файлов, ЛС)",
+    "telegram_complex": "Комплексные сценарии с Telegram"
   },
   "statistics": {
-    "total": 50,
+    "total": 65,
     "by_difficulty": {
-      "easy": 24,
-      "medium": 19,
-      "hard": 7
+      "easy": 32,
+      "medium": 23,
+      "hard": 10
     },
     "by_category": {
       "sandbox": 5,
@@ -386,7 +524,10 @@
       "docker": 4,
       "coding": 5,
       "complex": 4,
-      "tools": 2
+      "tools": 2,
+      "telegram": 10,
+      "telegram_bot": 3,
+      "telegram_complex": 2
     }
   }
 }

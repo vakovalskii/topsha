@@ -15,7 +15,7 @@ function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>🤖 LocalTopSH</h1>
+          <h1>Topsha</h1>
         </div>
         <nav className="sidebar-nav">
           <NavLink to="/" end>📊 Dashboard</NavLink>
@@ -29,6 +29,9 @@ function App() {
           <NavLink to="/users">👥 Users</NavLink>
           <NavLink to="/logs">📜 Logs</NavLink>
         </nav>
+        <div className="sidebar-footer">
+          AI Agent Framework v1.0
+        </div>
       </aside>
       <main className="main">
         <Routes>

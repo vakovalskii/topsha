@@ -30,7 +30,7 @@ def load_scenarios(path: str) -> dict:
         return json.load(f)
 
 
-def call_agent(prompt: str, user_id: int = 809532582, timeout: int = 120) -> dict:
+def call_agent(prompt: str, user_id: int = 809532582, timeout: int = 120, source: str = "bot") -> dict:
     """Отправить запрос агенту через docker exec"""
     payload = json.dumps({
         "user_id": user_id,
@@ -38,7 +38,7 @@ def call_agent(prompt: str, user_id: int = 809532582, timeout: int = 120) -> dic
         "message": prompt,
         "username": "test_runner",
         "chat_type": "private",
-        "source": "bot"
+        "source": source
     })
     
     cmd = [
@@ -121,7 +121,9 @@ def run_tests(
     limit: Optional[int] = None,
     delay: float = 2.0,
     clear_between: bool = True,
-    verbose: bool = False
+    verbose: bool = False,
+    source_filter: Optional[str] = None,
+    skip_userbot: bool = False
 ) -> dict:
     """Запустить тесты и собрать результаты"""
     
@@ -135,6 +137,10 @@ def run_tests(
         scenarios = [s for s in scenarios if s["id"] in ids]
     if difficulty:
         scenarios = [s for s in scenarios if s["difficulty"] == difficulty]
+    if source_filter:
+        scenarios = [s for s in scenarios if s.get("source", "bot") == source_filter]
+    if skip_userbot:
+        scenarios = [s for s in scenarios if s.get("source", "bot") != "userbot"]
     if limit:
         scenarios = scenarios[:limit]
     
@@ -163,6 +169,8 @@ def run_tests(
         category = scenario["category"]
         prompt = scenario["prompt"]
         difficulty_level = scenario["difficulty"]
+        test_source = scenario.get("source", "bot")
+        note = scenario.get("note", "")
         
         # Инициализация счётчиков по категориям
         if category not in results["by_category"]:
@@ -170,21 +178,25 @@ def run_tests(
         if difficulty_level not in results["by_difficulty"]:
             results["by_difficulty"][difficulty_level] = {"passed": 0, "failed": 0, "errors": 0}
         
-        print(f"{Colors.BLUE}[{i}/{len(scenarios)}]{Colors.RESET} Test #{test_id} ({category}/{difficulty_level})")
+        source_label = f" [{test_source}]" if test_source != "bot" else ""
+        print(f"{Colors.BLUE}[{i}/{len(scenarios)}]{Colors.RESET} Test #{test_id} ({category}/{difficulty_level}){source_label}")
         print(f"  📝 {prompt[:60]}{'...' if len(prompt) > 60 else ''}")
+        if note and verbose:
+            print(f"  📌 {note}")
         
         # Очистка сессии перед тестом
         if clear_between:
             clear_session()
         
         # Запуск теста
-        result = call_agent(prompt)
+        result = call_agent(prompt, source=test_source)
         results["total_time"] += result.get("elapsed", 0)
         
         test_result = {
             "id": test_id,
             "category": category,
             "difficulty": difficulty_level,
+            "source": test_source,
             "prompt": prompt,
             "expected_tools": scenario.get("expected_tools", []),
             "elapsed": result.get("elapsed", 0),
@@ -312,6 +324,16 @@ def main():
         action="store_true",
         help="List available categories and exit"
     )
+    parser.add_argument(
+        "--source",
+        choices=["bot", "userbot"],
+        help="Filter by source (bot or userbot)"
+    )
+    parser.add_argument(
+        "--skip-userbot",
+        action="store_true",
+        help="Skip tests that require userbot"
+    )
     
     args = parser.parse_args()
     
@@ -333,7 +355,9 @@ def main():
         limit=args.limit,
         delay=args.delay,
         clear_between=not args.no_clear,
-        verbose=args.verbose
+        verbose=args.verbose,
+        source_filter=args.source,
+        skip_userbot=args.skip_userbot
     )
     
     # Сохранение результатов

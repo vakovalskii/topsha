@@ -1,0 +1,443 @@
+{
+  "run_at": "2026-02-07T18:37:20.136440",
+  "total": 26,
+  "passed": 26,
+  "failed": 0,
+  "errors": 0,
+  "total_time": 101.88064408302307,
+  "by_category": {
+    "sandbox": {
+      "passed": 2,
+      "failed": 0,
+      "errors": 0
+    },
+    "file_ops": {
+      "passed": 4,
+      "failed": 0,
+      "errors": 0
+    },
+    "web_search": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    },
+    "scheduler": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    },
+    "memory": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    },
+    "tasks": {
+      "passed": 2,
+      "failed": 0,
+      "errors": 0
+    },
+    "skills": {
+      "passed": 2,
+      "failed": 0,
+      "errors": 0
+    },
+    "analysis": {
+      "passed": 1,
+      "failed": 0,
+      "errors": 0
+    },
+    "docker": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    },
+    "coding": {
+      "passed": 1,
+      "failed": 0,
+      "errors": 0
+    },
+    "tools": {
+      "passed": 2,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "passed": 26,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "tests": [
+    {
+      "id": 1,
+      "category": "sandbox",
+      "difficulty": "easy",
+      "prompt": "Запусти python скрипт который выводит числа от 1 до 10",
+      "expected_tools": [
+        "run_command"
+      ],
+      "elapsed": 6.5196919441223145,
+      "success": true,
+      "response": "готово, скрипт отдал 1‑10, короче вывод: \n1\n2\n3\n4\n5\n6\n7\n8\n9\n10 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 2,
+      "category": "sandbox",
+      "difficulty": "easy",
+      "prompt": "Установи библиотеку requests через pip и покажи её версию",
+      "expected_tools": [
+        "run_command"
+      ],
+      "elapsed": 4.491427183151245,
+      "success": true,
+      "response": "установил requests, версия 2.32.5 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 6,
+      "category": "file_ops",
+      "difficulty": "easy",
+      "prompt": "Создай файл notes.txt с текстом 'Hello World' и прочитай его",
+      "expected_tools": [
+        "write_file",
+        "read_file"
+      ],
+      "elapsed": 4.558903694152832,
+      "success": true,
+      "response": "файл создан, прочитал, внутри `Hello World` 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 7,
+      "category": "file_ops",
+      "difficulty": "easy",
+      "prompt": "Найди все .py файлы в текущей директории",
+      "expected_tools": [
+        "search_files"
+      ],
+      "elapsed": 4.493617057800293,
+      "success": true,
+      "response": "Нашёл .py файлы в корне проекта (без виртуального окружения): script.py, generate_docx_desc.py, gen_fractal.py, count.py, clock_app.py, snake_server.py, create_ppt.py, calc_pi.py, create_ny_ppt.py, fastapi_clock.py, sonnet5_presentation.py, pi_calc.py, compute_pi.py, generate_docx.py, cube_gif.py, generate_ppt.py, generate_ny_ppt.py, openai_report_to_ppt.py, docx_description.py, app_clock.py, generate_pptx.py 🔥\n\nБыло скучно искать, так что добавил чуть юмора — типа «кpython‑хат» 🐍. Если нужно что‑то открыть или редактировать — дай знать!",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 9,
+      "category": "file_ops",
+      "difficulty": "easy",
+      "prompt": "Найди все файлы содержащие слово 'TODO' в текущей директории",
+      "expected_tools": [
+        "search_text"
+      ],
+      "elapsed": 2.551565170288086,
+      "success": true,
+      "response": "нашёл файлы с «TODO», короче они находятся в репе: .repo_openai_agents/src/agents/... (много там, в advanced_sqlite_session, realtime, models и т.д.), плюс в venv‑пакетах pip/_vendor, и в skills/skill‑creator/scripts/init_skill.py, skills_repo/skill‑creator и anthropics_skills/skill‑creator. если нужен конкретный список — дай знать, уточню нужные пути 😎",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 10,
+      "category": "file_ops",
+      "difficulty": "easy",
+      "prompt": "Отредактируй файл notes.txt - замени 'Hello' на 'Goodbye'",
+      "expected_tools": [
+        "read_file",
+        "edit_file"
+      ],
+      "elapsed": 1.6478252410888672,
+      "success": true,
+      "response": "заменил, готово 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 11,
+      "category": "web_search",
+      "difficulty": "easy",
+      "prompt": "Найди в интернете текущий курс биткоина",
+      "expected_tools": [
+        "search_web"
+      ],
+      "elapsed": 3.4051482677459717,
+      "success": true,
+      "response": "Курс биткоина сейчас где‑то около $69 000 USD (примерно $69 220 по Binance). Учти, цена меняется каждую секунду, так что проверяй актуальные данные, если нужен точный момент 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 12,
+      "category": "web_search",
+      "difficulty": "easy",
+      "prompt": "Найди последние новости про искусственный интеллект",
+      "expected_tools": [
+        "search_web"
+      ],
+      "elapsed": 4.524818658828735,
+      "success": true,
+      "response": "Новые практики в ИИ уже в центре внимания: 4 февраля ООН предупредило, что «искусственный интеллект движется со скоростью света» и опубликовало рекомендации для экспертов по контролю рисков 🛡️; 3 февраля вышел Международный отчёт о безопасности ИИ 2026, в котором подчёркнуто, что быстрый рост моделей требует новых правовых рамок; в конце недели в США стартап из Сан‑Франциско выпустил набор инструментов, позволяющих автоматизировать финансовый анализ, а аналитики NYT назвали их потенциальным драйвером новых волатильностей рынка 📈.  \nЕсли хочешь подробнее – дай знать, подкину ссылки!",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 14,
+      "category": "web_search",
+      "difficulty": "easy",
+      "prompt": "Скачай содержимое страницы https://example.com и сохрани в файл",
+      "expected_tools": [
+        "fetch_page",
+        "write_file"
+      ],
+      "elapsed": 3.2926175594329834,
+      "success": true,
+      "response": "готово, файл прилетел, в нём html с https://example.com 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 17,
+      "category": "scheduler",
+      "difficulty": "easy",
+      "prompt": "Напомни мне через 10 минут про встречу",
+      "expected_tools": [
+        "schedule_task"
+      ],
+      "elapsed": 1.4354591369628906,
+      "success": true,
+      "response": "Готово, напомню через 10 минут про встречу 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 18,
+      "category": "scheduler",
+      "difficulty": "easy",
+      "prompt": "Покажи все запланированные задачи",
+      "expected_tools": [
+        "schedule_task"
+      ],
+      "elapsed": 1.3038110733032227,
+      "success": true,
+      "response": "Сейчас в планировщике два задания:  \n‑ task_1770489223_f44b51 — агент, выполнится через 1 мин, будет повторяться каждые 2 мин; задача «Найди текущий курс доллара к рублю через веб‑поиск».  \n‑ task_1770489495_da07dc — сообщение, выполнится через 9 мин; «Напоминание: встреча».  \n\nЧё-нибудь менять? 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 20,
+      "category": "scheduler",
+      "difficulty": "easy",
+      "prompt": "Отмени все запланированные задачи",
+      "expected_tools": [
+        "schedule_task"
+      ],
+      "elapsed": 1.8691365718841553,
+      "success": true,
+      "response": "всё отменил, задач нет ✅",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 21,
+      "category": "memory",
+      "difficulty": "easy",
+      "prompt": "Запомни что мой любимый язык программирования - Python",
+      "expected_tools": [
+        "memory"
+      ],
+      "elapsed": 0.9258270263671875,
+      "success": true,
+      "response": "запомнил, Python — твой фаворит 🐍. Чем ещё могу помочь?",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 22,
+      "category": "memory",
+      "difficulty": "easy",
+      "prompt": "Что ты помнишь обо мне?",
+      "expected_tools": [
+        "memory"
+      ],
+      "elapsed": 4.358065128326416,
+      "success": true,
+      "response": "Эй, помню, ты спрашивал курс доллара – он сейчас 76.78 ₽, запустил скрипт, который считает от 1 до 10, делал файл notes.txt с «Hello World», а ещё ты явно фанатеешь от Python 🚀. Что ещё нужно?",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 23,
+      "category": "memory",
+      "difficulty": "easy",
+      "prompt": "Очисти всю память",
+      "expected_tools": [
+        "memory"
+      ],
+      "elapsed": 1.0739541053771973,
+      "success": true,
+      "response": "память чисто, всё стерто ✅",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 24,
+      "category": "tasks",
+      "difficulty": "easy",
+      "prompt": "Создай список задач: 1) Изучить Docker 2) Написать тесты 3) Задеплоить приложение",
+      "expected_tools": [
+        "manage_tasks"
+      ],
+      "elapsed": 1.6507208347320557,
+      "success": true,
+      "response": "Изучить Docker, написать тесты, задеплоить приложение 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 25,
+      "category": "tasks",
+      "difficulty": "easy",
+      "prompt": "Покажи все мои задачи и отметь первую как выполненную",
+      "expected_tools": [
+        "manage_tasks"
+      ],
+      "elapsed": 3.145982503890991,
+      "success": true,
+      "response": "✅ Всё, задачи: t1 — Искать курс доллара (выполнено) 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 26,
+      "category": "skills",
+      "difficulty": "easy",
+      "prompt": "Покажи какие скиллы установлены",
+      "expected_tools": [
+        "list_skills"
+      ],
+      "elapsed": 1.252744436264038,
+      "success": true,
+      "response": "установленные скиллы: example-skill, pptx, docx 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 29,
+      "category": "skills",
+      "difficulty": "easy",
+      "prompt": "Какие скиллы доступны для установки?",
+      "expected_tools": [
+        "list_skills"
+      ],
+      "elapsed": 1.8198068141937256,
+      "success": true,
+      "response": "Сейчас в системе есть такие скиллы:\n\n✅ уже установлены: `example-skill`, `pptx`, `docx`\n\n📦 доступные к установке: `xlsx`, `pdf`, `canvas-design`, `frontend-design`, `webapp-testing`, `mcp-builder`, `skill-creator`, `algorithmic-art`, `brand-guidelines`, `doc-coauthoring`, `internal-comms`, `slack-gif-creator`, `theme-factory`, `web-artifacts-builder`  \n\nЕсли нужен какой‑то конкретный – дай знать, установлю! 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 35,
+      "category": "analysis",
+      "difficulty": "easy",
+      "prompt": "Найди самый большой файл в текущей директории",
+      "expected_tools": [
+        "run_command",
+        "list_directory"
+      ],
+      "elapsed": 1.2737438678741455,
+      "success": true,
+      "response": "нашёл самый большой файл — `openai-agents-python` размером 26 мб 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 36,
+      "category": "docker",
+      "difficulty": "easy",
+      "prompt": "Покажи запущенные Docker контейнеры",
+      "expected_tools": [
+        "mcp:docker_ps"
+      ],
+      "elapsed": 1.8965458869934082,
+      "success": true,
+      "response": "docker не установлен в окружении, так что контейнеры показать не получится 😅",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 37,
+      "category": "docker",
+      "difficulty": "easy",
+      "prompt": "Покажи логи контейнера core за последние 50 строк",
+      "expected_tools": [
+        "mcp:docker_logs"
+      ],
+      "elapsed": 4.435661792755127,
+      "success": true,
+      "response": "Эй, ядра в Docker у меня тут нет, поэтому `docker logs` не сработает 😅. Если логи где‑то записываются в файл (например `core.log`), дай знать путь – подгоню последние 50 строк. Если нужен именно вывод `docker logs`, то, к сожалению, в этом песочном окружении Docker недоступен. 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 38,
+      "category": "docker",
+      "difficulty": "easy",
+      "prompt": "Какие Docker образы есть на сервере?",
+      "expected_tools": [
+        "mcp:docker_images"
+      ],
+      "elapsed": 1.5251867771148682,
+      "success": true,
+      "response": "Docker не установлен в этой среде, так что образов нет 😅🧹",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 40,
+      "category": "coding",
+      "difficulty": "easy",
+      "prompt": "Напиши Python функцию для сортировки списка и протестируй её",
+      "expected_tools": [
+        "write_file",
+        "run_command"
+      ],
+      "elapsed": 4.30427360534668,
+      "success": true,
+      "response": "сделал, вот функция на Python (пузырёк, простенько) и короткий тест:\n\n```python\ndef bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n-i-1):\n            if arr[j] > arr[j+1]:\n                arr[j], arr[j+1] = arr[j+1], arr[j]\n    return arr\n\n# тест\nsample = [5, 2, 9, 1, 5, 6]\nprint(\"sorted:\", bubble_sort(sample.copy()))\n```\n\nрезультат запуска: `sorted: [1, 2, 5, 5, 6, 9]` 🚀  \nкороче, работает, можно впихнуть любой список. 🙌",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 49,
+      "category": "tools",
+      "difficulty": "easy",
+      "prompt": "Какие инструменты у тебя есть? Найди все связанные с Docker",
+      "expected_tools": [
+        "search_tools"
+      ],
+      "elapsed": 32.50678491592407,
+      "success": true,
+      "response": "у меня есть набор тулов: run_command, read_file, write_file, edit_file, delete_file, search_files, search_text, list_directory, search_web, fetch_page, memory, schedule_task, manage_tasks, install_skill, list_skills, send_file, send_dm, manage_message, ask_user.  \n\nискал по всем файлам в рабочей папке упоминания «docker», ничего не нашёл – никаких скриптов или конфигов, связанных с Docker, у меня сейчас нет. 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 50,
+      "category": "tools",
+      "difficulty": "easy",
+      "prompt": "Покажи все доступные MCP инструменты",
+      "expected_tools": [
+        "search_tools"
+      ],
+      "elapsed": 1.6173248291015625,
+      "success": true,
+      "response": "смесь всех MCP‑инструментов: run_command, read_file, write_file, edit_file, delete_file, search_files, search_text, list_directory, search_web, fetch_page, memory, schedule_task, manage_tasks, install_skill, list_skills, send_file, send_dm, manage_message, ask_user 🚀",
+      "error": "",
+      "status": "passed"
+    }
+  ]
+}

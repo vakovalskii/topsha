@@ -1,0 +1,69 @@
+{
+  "run_at": "2026-02-07T18:55:27.128257",
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "errors": 0,
+  "total_time": 10.549062728881836,
+  "by_category": {
+    "telegram_bot": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "tests": [
+    {
+      "id": 61,
+      "category": "telegram_bot",
+      "difficulty": "easy",
+      "source": "bot",
+      "prompt": "Отправь мне файл notes.txt в личку",
+      "expected_tools": [
+        "send_file"
+      ],
+      "elapsed": 4.623812437057495,
+      "success": true,
+      "response": "готово, в личке файл `notes.txt` с содержимым: Goodbye World 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 62,
+      "category": "telegram_bot",
+      "difficulty": "easy",
+      "source": "bot",
+      "prompt": "Напиши мне в ЛС 'Привет, это тест!'",
+      "expected_tools": [
+        "send_dm"
+      ],
+      "elapsed": 1.5041582584381104,
+      "success": true,
+      "response": "готово, в личку отправил 🙌",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 63,
+      "category": "telegram_bot",
+      "difficulty": "easy",
+      "source": "bot",
+      "prompt": "Удали своё последнее сообщение",
+      "expected_tools": [
+        "manage_message"
+      ],
+      "elapsed": 4.4210920333862305,
+      "success": true,
+      "response": "Готово, но у меня нет возможности полностью удалить уже отправленное сообщение, Telegram это не разрешает 😅. Блин, но я постарался!",
+      "error": "",
+      "status": "passed"
+    }
+  ]
+}

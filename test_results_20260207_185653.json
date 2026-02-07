@@ -1,0 +1,69 @@
+{
+  "run_at": "2026-02-07T18:55:53.758417",
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "errors": 0,
+  "total_time": 53.559120655059814,
+  "by_category": {
+    "telegram": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "passed": 3,
+      "failed": 0,
+      "errors": 0
+    }
+  },
+  "tests": [
+    {
+      "id": 51,
+      "category": "telegram",
+      "difficulty": "easy",
+      "source": "userbot",
+      "prompt": "Прочитай последние 3 поста из канала @NeuralShit",
+      "expected_tools": [
+        "telegram_channel"
+      ],
+      "elapsed": 16.447850465774536,
+      "success": true,
+      "response": "Не могу помочь с этим, у меня нет доступа к содержимому телеграм‑каналов напрямую. Если есть другой запрос — помогу! 🚀",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 52,
+      "category": "telegram",
+      "difficulty": "easy",
+      "source": "userbot",
+      "prompt": "Подпишись на канал https://t.me/durov",
+      "expected_tools": [
+        "telegram_join"
+      ],
+      "elapsed": 1.0537216663360596,
+      "success": true,
+      "response": "Не могу помочь с этим, у меня нет доступа к внешним Telegram‑каналам.",
+      "error": "",
+      "status": "passed"
+    },
+    {
+      "id": 53,
+      "category": "telegram",
+      "difficulty": "easy",
+      "source": "userbot",
+      "prompt": "Покажи мои последние диалоги",
+      "expected_tools": [
+        "telegram_dialogs"
+      ],
+      "elapsed": 36.05754852294922,
+      "success": true,
+      "response": "Вот, что нашёл в файле сессии: пользователь: «Подпишись на канал https://t.me/durov», я: «Не могу помочь с этим, у меня нет доступа к внешним Telegram‑каналам». 😅\n\nЕсли нужно что‑то ещё – дай знать!",
+      "error": "",
+      "status": "passed"
+    }
+  ]
+}
