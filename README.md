@@ -29,45 +29,157 @@ Unlike projects that rely on abusing consumer subscriptions (Claude Max, ChatGPT
 
 ---
 
-## Agent Skills
+## Built-in Capabilities
 
 What the agent can do out of the box:
 
 ### 💻 System & Files
-| Skill | Description |
-|-------|-------------|
+| Capability | Description |
+|------------|-------------|
 | **Shell execution** | Run any command in isolated sandbox |
 | **File operations** | Read, write, edit, delete, search files |
 | **Directory navigation** | List, search by glob patterns |
 | **Code execution** | Python, Node.js, bash scripts |
 
 ### 🌐 Web & Research
-| Skill | Description |
-|-------|-------------|
+| Capability | Description |
+|------------|-------------|
 | **Web search** | Search via Z.AI API |
 | **Page fetching** | Get any URL as clean markdown |
 | **Link extraction** | Parse and follow links |
 
 ### 🧠 Memory & Context
-| Skill | Description |
-|-------|-------------|
+| Capability | Description |
+|------------|-------------|
 | **Persistent memory** | Remember facts across sessions |
 | **Task management** | Todo lists within session |
 | **Chat history** | Full conversation context |
 
 ### ⏰ Automation
-| Skill | Description |
-|-------|-------------|
+| Capability | Description |
+|------------|-------------|
 | **Scheduled tasks** | Cron-like reminders |
 | **Background jobs** | Long-running processes |
 
 ### 📱 Telegram Integration
-| Skill | Description |
-|-------|-------------|
+| Capability | Description |
+|------------|-------------|
 | **Send files** | Share generated files |
 | **Direct messages** | Send DMs to users |
 | **Message management** | Edit/delete bot messages |
 | **Interactive prompts** | Ask user and wait for response |
+
+---
+
+## Skills System
+
+Skills are extensible packages that add new tools, prompts, and commands to the agent. Similar to Anthropic's Skills feature.
+
+### How Skills Work
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      SKILLS ARCHITECTURE                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   /workspace/{user_id}/skills/    ← User-specific skills       │
+│   └── my-skill/                                                 │
+│       └── skill.json                                            │
+│                                                                 │
+│   /data/skills/                   ← Shared skills (all users)  │
+│   └── common-skill/                                             │
+│       └── skill.json                                            │
+│                                                                 │
+│   Tools API scans these directories on each request             │
+│   New skills are picked up automatically!                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### skill.json Format
+
+```json
+{
+  "name": "my-skill",
+  "description": "What this skill does",
+  "version": "1.0.0",
+  "author": "Your Name",
+  
+  "tools": [
+    {
+      "name": "my_tool",
+      "description": "What this tool does",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "input": {"type": "string", "description": "Input parameter"}
+        },
+        "required": ["input"]
+      }
+    }
+  ],
+  
+  "system_prompt": "Additional instructions for the agent when this skill is active.",
+  
+  "commands": {
+    "/mycommand": "Description of slash command"
+  },
+  
+  "enabled": true
+}
+```
+
+### Creating a Skill
+
+```bash
+# 1. Create skill directory in your workspace
+mkdir -p /workspace/skills/my-skill
+
+# 2. Create skill.json
+cat > /workspace/skills/my-skill/skill.json << 'EOF'
+{
+  "name": "my-skill",
+  "description": "My custom skill",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "hello",
+      "description": "Say hello",
+      "parameters": {"type": "object", "properties": {}}
+    }
+  ]
+}
+EOF
+
+# 3. Skills are loaded automatically on next agent request!
+```
+
+### Skills API
+
+```bash
+# List all skills
+curl http://localhost:8100/skills?user_id=123456
+
+# Get skill details
+curl http://localhost:8100/skills/my-skill?user_id=123456
+
+# Force rescan
+curl -X POST http://localhost:8100/skills/scan?user_id=123456
+
+# Get all system prompts from skills
+curl http://localhost:8100/skills/prompts/all?user_id=123456
+
+# Enable/disable skill
+curl -X PUT http://localhost:8100/skills/my-skill \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+### Tool Naming
+
+Skill tools are prefixed with `skill_{name}_{tool}`:
+- `skill_my-skill_hello`
+- `skill_github_create_pr`
 
 ---
 

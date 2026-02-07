@@ -29,8 +29,11 @@ services:
     build: ./tools-api
     container_name: tools-api
     restart: unless-stopped
+    environment:
+      - WORKSPACE_ROOT=/workspace
     volumes:
       - ./workspace/_shared:/data
+      - ./workspace:/workspace:ro  # Read-only access to scan for skills
     networks:
       - agent-net
     healthcheck:
@@ -42,8 +45,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: 128M
+          cpus: '0.3'
+          memory: 192M
 
   # ============ CORE - Agent + Tools + HTTP API ============
   core:

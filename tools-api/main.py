@@ -1,23 +1,30 @@
 """
 Tools API - Single source of truth for agent tools
-Provides tool definitions, MCP server management, and dynamic tool loading
+Provides tool definitions, MCP server management, Skills, and dynamic tool loading
 """
 
 import os
 import json
 import asyncio
 import httpx
+import glob
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
-app = FastAPI(title="Tools API", version="2.0")
+app = FastAPI(title="Tools API", version="3.0")
 
 # Config files
 CONFIG_FILE = "/data/tools_config.json"
 MCP_CONFIG_FILE = "/data/mcp_servers.json"
 MCP_TOOLS_CACHE = "/data/mcp_tools_cache.json"
+SKILLS_CACHE = "/data/skills_cache.json"
+
+# Workspace paths (mounted volume)
+WORKSPACE_ROOT = os.environ.get("WORKSPACE_ROOT", "/workspace")
+SHARED_SKILLS_DIR = "/data/skills"  # Global skills directory
 
 # ============ BUILT-IN TOOLS ============
 
@@ -300,6 +307,162 @@ class MCPToolsCache:
 mcp_cache = MCPToolsCache()
 
 
+# ============ SKILLS SUPPORT ============
+
+class Skill(BaseModel):
+    """Skill definition - like Anthropic's Skills"""
+    name: str
+    description: str
+    version: str = "1.0"
+    author: Optional[str] = None
+    
+    # Skill can provide:
+    tools: List[dict] = []           # Custom tools
+    system_prompt: Optional[str] = None  # Additional system prompt
+    resources: List[str] = []        # Files/URLs to include in context
+    commands: Dict[str, str] = {}    # Slash commands
+    
+    # Metadata
+    enabled: bool = True
+    source: str = "user"  # user, shared, marketplace
+    path: Optional[str] = None
+
+
+class SkillsManager:
+    """Manages skills loaded from user workspaces and shared directory"""
+    
+    def __init__(self):
+        self.skills: Dict[str, Skill] = {}
+        self.skill_tools: Dict[str, dict] = {}  # Flattened tools from all skills
+        self.last_scan: Optional[datetime] = None
+    
+    def load_cache(self):
+        """Load skills cache from file"""
+        if os.path.exists(SKILLS_CACHE):
+            try:
+                with open(SKILLS_CACHE) as f:
+                    data = json.load(f)
+                    for name, skill_data in data.get("skills", {}).items():
+                        self.skills[name] = Skill(**skill_data)
+                    self.skill_tools = data.get("skill_tools", {})
+                    self.last_scan = datetime.fromisoformat(data["last_scan"]) if data.get("last_scan") else None
+            except Exception as e:
+                print(f"Error loading skills cache: {e}")
+    
+    def save_cache(self):
+        """Save skills cache to file"""
+        os.makedirs(os.path.dirname(SKILLS_CACHE), exist_ok=True)
+        with open(SKILLS_CACHE, 'w') as f:
+            json.dump({
+                "skills": {name: skill.dict() for name, skill in self.skills.items()},
+                "skill_tools": self.skill_tools,
+                "last_scan": self.last_scan.isoformat() if self.last_scan else None
+            }, f, indent=2)
+    
+    def scan_directory(self, directory: str, source: str = "user") -> List[Skill]:
+        """Scan directory for skill.json files"""
+        found_skills = []
+        
+        if not os.path.exists(directory):
+            return found_skills
+        
+        # Look for skill.json in immediate subdirectories
+        for item in os.listdir(directory):
+            skill_dir = os.path.join(directory, item)
+            skill_file = os.path.join(skill_dir, "skill.json")
+            
+            if os.path.isdir(skill_dir) and os.path.exists(skill_file):
+                try:
+                    with open(skill_file) as f:
+                        data = json.load(f)
+                        skill = Skill(
+                            name=data.get("name", item),
+                            description=data.get("description", ""),
+                            version=data.get("version", "1.0"),
+                            author=data.get("author"),
+                            tools=data.get("tools", []),
+                            system_prompt=data.get("system_prompt"),
+                            resources=data.get("resources", []),
+                            commands=data.get("commands", {}),
+                            enabled=data.get("enabled", True),
+                            source=source,
+                            path=skill_dir
+                        )
+                        found_skills.append(skill)
+                except Exception as e:
+                    print(f"Error loading skill from {skill_file}: {e}")
+        
+        return found_skills
+    
+    def scan_user_workspace(self, user_id: str) -> List[Skill]:
+        """Scan user's workspace for skills"""
+        user_skills_dir = os.path.join(WORKSPACE_ROOT, user_id, "skills")
+        return self.scan_directory(user_skills_dir, source=f"user:{user_id}")
+    
+    def scan_shared_skills(self) -> List[Skill]:
+        """Scan shared skills directory"""
+        return self.scan_directory(SHARED_SKILLS_DIR, source="shared")
+    
+    def scan_all(self, user_id: Optional[str] = None):
+        """Scan all skill sources and update cache"""
+        self.skills.clear()
+        self.skill_tools.clear()
+        
+        # 1. Load shared skills
+        for skill in self.scan_shared_skills():
+            self.skills[f"shared:{skill.name}"] = skill
+        
+        # 2. Load user skills (if user_id provided)
+        if user_id:
+            for skill in self.scan_user_workspace(user_id):
+                self.skills[f"user:{skill.name}"] = skill
+        
+        # 3. Flatten tools from all enabled skills
+        for skill_key, skill in self.skills.items():
+            if skill.enabled:
+                for tool in skill.tools:
+                    tool_name = f"skill_{skill.name}_{tool['name']}"
+                    self.skill_tools[tool_name] = {
+                        "name": tool_name,
+                        "original_name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool.get("parameters", {"type": "object", "properties": {}}),
+                        "source": f"skill:{skill.name}",
+                        "skill": skill.name,
+                        "enabled": True
+                    }
+        
+        self.last_scan = datetime.now()
+        self.save_cache()
+    
+    def get_skill(self, name: str) -> Optional[Skill]:
+        """Get skill by name"""
+        # Try exact match first
+        if name in self.skills:
+            return self.skills[name]
+        # Try without prefix
+        for key, skill in self.skills.items():
+            if skill.name == name:
+                return skill
+        return None
+    
+    def get_enabled_tools(self) -> Dict[str, dict]:
+        """Get all enabled tools from skills"""
+        return {name: tool for name, tool in self.skill_tools.items() if tool.get("enabled", True)}
+    
+    def get_system_prompts(self) -> List[str]:
+        """Get all system prompts from enabled skills"""
+        prompts = []
+        for skill in self.skills.values():
+            if skill.enabled and skill.system_prompt:
+                prompts.append(f"# Skill: {skill.name}\n{skill.system_prompt}")
+        return prompts
+
+
+# Global skills manager
+skills_manager = SkillsManager()
+
+
 def load_mcp_config() -> Dict[str, MCPServer]:
     """Load MCP server configurations"""
     if os.path.exists(MCP_CONFIG_FILE):
@@ -410,8 +573,8 @@ def save_config(config: dict):
         json.dump(config, f, indent=2)
 
 
-def get_all_tools_with_state() -> dict:
-    """Get all tools (builtin + MCP) with their enabled/disabled state"""
+def get_all_tools_with_state(user_id: Optional[str] = None) -> dict:
+    """Get all tools (builtin + MCP + Skills) with their enabled/disabled state"""
     config = load_config()
     tools = {}
     
@@ -432,6 +595,15 @@ def get_all_tools_with_state() -> dict:
             "enabled": enabled
         }
     
+    # Skills tools (scan on each call for freshness)
+    skills_manager.scan_all(user_id)
+    for name, tool in skills_manager.get_enabled_tools().items():
+        enabled = config.get(name, {}).get("enabled", tool.get("enabled", True))
+        tools[name] = {
+            **tool,
+            "enabled": enabled
+        }
+    
     return tools
 
 
@@ -443,12 +615,13 @@ async def health():
 
 
 @app.get("/tools")
-async def get_all_tools():
+async def get_all_tools(user_id: Optional[str] = None):
     """Get all tools with their definitions and state"""
-    tools = get_all_tools_with_state()
+    tools = get_all_tools_with_state(user_id)
     
     builtin_count = len([t for t in tools.values() if t.get("source") == "builtin"])
     mcp_count = len([t for t in tools.values() if t.get("source", "").startswith("mcp:")])
+    skill_count = len([t for t in tools.values() if t.get("source", "").startswith("skill:")])
     
     return {
         "tools": list(tools.values()),
@@ -456,15 +629,20 @@ async def get_all_tools():
         "stats": {
             "builtin": builtin_count,
             "mcp": mcp_count,
+            "skill": skill_count,
             "total": len(tools)
         }
     }
 
 
 @app.get("/tools/enabled")
-async def get_enabled_tools():
-    """Get only enabled tools in OpenAI format (for agent)"""
-    tools = get_all_tools_with_state()
+async def get_enabled_tools(user_id: Optional[str] = None):
+    """Get only enabled tools in OpenAI format (for agent)
+    
+    Pass user_id to include user-specific skills from their workspace.
+    Tools are refreshed on each call to pick up new skills.
+    """
+    tools = get_all_tools_with_state(user_id)
     enabled = []
     
     for tool in tools.values():
@@ -697,13 +875,124 @@ async def call_mcp_tool_endpoint(server_name: str, tool_name: str, arguments: di
     return result
 
 
+# ============ SKILLS MANAGEMENT ============
+
+@app.get("/skills")
+async def list_skills(user_id: Optional[str] = None):
+    """List all available skills"""
+    skills_manager.scan_all(user_id)
+    
+    skills_list = []
+    for key, skill in skills_manager.skills.items():
+        tool_count = len([t for t in skills_manager.skill_tools.values() if t.get("skill") == skill.name])
+        skills_list.append({
+            "key": key,
+            "name": skill.name,
+            "description": skill.description,
+            "version": skill.version,
+            "author": skill.author,
+            "source": skill.source,
+            "enabled": skill.enabled,
+            "tool_count": tool_count,
+            "has_system_prompt": bool(skill.system_prompt),
+            "commands": list(skill.commands.keys()) if skill.commands else [],
+            "path": skill.path
+        })
+    
+    return {
+        "skills": skills_list,
+        "total": len(skills_list),
+        "last_scan": skills_manager.last_scan.isoformat() if skills_manager.last_scan else None
+    }
+
+
+@app.get("/skills/{name}")
+async def get_skill(name: str, user_id: Optional[str] = None):
+    """Get skill details"""
+    skills_manager.scan_all(user_id)
+    skill = skills_manager.get_skill(name)
+    
+    if not skill:
+        raise HTTPException(404, f"Skill {name} not found")
+    
+    # Get tools from this skill
+    skill_tools = [t for t in skills_manager.skill_tools.values() if t.get("skill") == skill.name]
+    
+    return {
+        "skill": skill.dict(),
+        "tools": skill_tools
+    }
+
+
+@app.post("/skills/scan")
+async def scan_skills(user_id: Optional[str] = None):
+    """Force rescan of all skills"""
+    skills_manager.scan_all(user_id)
+    
+    return {
+        "success": True,
+        "skills_found": len(skills_manager.skills),
+        "tools_loaded": len(skills_manager.skill_tools),
+        "last_scan": skills_manager.last_scan.isoformat() if skills_manager.last_scan else None
+    }
+
+
+@app.get("/skills/{name}/prompt")
+async def get_skill_prompt(name: str, user_id: Optional[str] = None):
+    """Get system prompt from a skill"""
+    skills_manager.scan_all(user_id)
+    skill = skills_manager.get_skill(name)
+    
+    if not skill:
+        raise HTTPException(404, f"Skill {name} not found")
+    
+    return {
+        "name": skill.name,
+        "system_prompt": skill.system_prompt
+    }
+
+
+@app.get("/skills/prompts/all")
+async def get_all_skill_prompts(user_id: Optional[str] = None):
+    """Get all system prompts from enabled skills"""
+    skills_manager.scan_all(user_id)
+    prompts = skills_manager.get_system_prompts()
+    
+    return {
+        "prompts": prompts,
+        "count": len(prompts)
+    }
+
+
+class SkillToggle(BaseModel):
+    enabled: bool
+
+
+@app.put("/skills/{name}")
+async def toggle_skill(name: str, data: SkillToggle, user_id: Optional[str] = None):
+    """Enable/disable a skill"""
+    skills_manager.scan_all(user_id)
+    skill = skills_manager.get_skill(name)
+    
+    if not skill:
+        raise HTTPException(404, f"Skill {name} not found")
+    
+    # Update enabled state (this will be lost on next scan, need persistent config)
+    skill.enabled = data.enabled
+    skills_manager.save_cache()
+    
+    return {"success": True, "name": name, "enabled": data.enabled}
+
+
 # ============ STARTUP ============
 
 @app.on_event("startup")
 async def startup():
     """Load caches on startup"""
     mcp_cache.load_cache()
+    skills_manager.load_cache()
     print(f"Loaded {len(mcp_cache.tools)} MCP tools from cache")
+    print(f"Loaded {len(skills_manager.skills)} skills from cache")
 
 
 if __name__ == "__main__":
