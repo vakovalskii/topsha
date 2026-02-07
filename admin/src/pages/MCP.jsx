@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getMcpServers, addMcpServer, removeMcpServer, refreshMcpServer, refreshAllMcp } from '../api'
+import { getMcpServers, addMcpServer, removeMcpServer, toggleMcpServer, refreshMcpServer, refreshAllMcp } from '../api'
 
 function MCP() {
   const [servers, setServers] = useState([])
@@ -70,6 +70,16 @@ function MCP() {
     }
   }
 
+  async function handleToggle(name, currentEnabled) {
+    try {
+      await toggleMcpServer(name, !currentEnabled)
+      showToast('success', `Server "${name}" ${!currentEnabled ? 'enabled' : 'disabled'}`)
+      loadServers()
+    } catch (e) {
+      showToast('error', e.message)
+    }
+  }
+
   async function handleRefreshAll() {
     setRefreshing('all')
     try {
@@ -121,17 +131,26 @@ function MCP() {
       ) : (
         <div className="grid grid-2">
           {servers.map(server => (
-            <div className="card" key={server.name}>
+            <div className="card" key={server.name} style={{ opacity: server.enabled === false ? 0.6 : 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <h3 style={{ fontSize: '16px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label className="toggle" title={server.enabled !== false ? 'Disable server' : 'Enable server'}>
+                      <input 
+                        type="checkbox" 
+                        checked={server.enabled !== false}
+                        onChange={() => handleToggle(server.name, server.enabled !== false)}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
                     <span style={{ 
                       width: '10px', 
                       height: '10px', 
                       borderRadius: '50%', 
-                      background: server.status?.connected ? 'var(--success)' : 'var(--error)'
+                      background: server.enabled === false ? 'var(--text-dim)' : (server.status?.connected ? 'var(--success)' : 'var(--error)')
                     }}></span>
                     {server.name}
+                    {server.enabled === false && <span className="badge" style={{ marginLeft: '8px' }}>disabled</span>}
                   </h3>
                   <p style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '8px', wordBreak: 'break-all' }}>
                     {server.url}

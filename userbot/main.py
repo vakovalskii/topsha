@@ -126,10 +126,15 @@ def should_respond(event, message_text: str) -> tuple[bool, str]:
     is_dm = event.is_private
     is_mentioned = my_username and f"@{my_username.lower()}" in message_text.lower()
     is_reply_to_me = event.is_reply and event.reply_to_msg_id  # Will check if reply to our msg
+    is_forwarded = hasattr(event.message, 'fwd_from') and event.message.fwd_from is not None
     
     if is_dm:
         chance = RESPONSE_CHANCE_DM
         reason = "DM"
+        # Forwarded messages in DM - always respond
+        if is_forwarded:
+            chance = 1.0
+            reason = "DM + forwarded"
     elif is_mentioned:
         chance = RESPONSE_CHANCE_MENTION
         reason = "mentioned"
@@ -613,10 +618,22 @@ async def main():
         message = event.message
         text = message.text or message.message or ""
         
+        # Check if forwarded
+        is_forwarded = message.fwd_from is not None
+        fwd_info = ""
+        if is_forwarded:
+            fwd = message.fwd_from
+            if fwd.from_name:
+                fwd_info = f" [fwd from: {fwd.from_name}]"
+            elif fwd.from_id:
+                fwd_info = f" [fwd from ID: {fwd.from_id}]"
+            else:
+                fwd_info = " [forwarded]"
+        
         # Log ALL incoming messages
         chat = await event.get_chat()
         chat_name = getattr(chat, 'title', None) or getattr(chat, 'username', None) or str(event.chat_id)
-        print(f"[msg] {chat_name}: {text[:50]}...")
+        print(f"[msg] {chat_name}: {text[:50]}...{fwd_info}")
         
         if not text:
             return

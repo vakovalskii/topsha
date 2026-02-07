@@ -288,6 +288,11 @@ from tools.send_dm import tool_send_dm
 from tools.message import tool_manage_message
 from tools.ask_user import tool_ask_user
 from tools.permissions import check_tool_permission, filter_tools_for_session
+from tools.telegram import (
+    tool_telegram_channel, tool_telegram_join, tool_telegram_send,
+    tool_telegram_history, tool_telegram_dialogs, tool_telegram_delete,
+    tool_telegram_edit, tool_telegram_resolve
+)
 
 
 # Skill management tools
@@ -383,6 +388,15 @@ TOOL_EXECUTORS = {
     "ask_user": tool_ask_user,
     "install_skill": tool_install_skill,
     "list_skills": tool_list_skills,
+    # Telegram userbot tools
+    "telegram_channel": tool_telegram_channel,
+    "telegram_join": tool_telegram_join,
+    "telegram_send": tool_telegram_send,
+    "telegram_history": tool_telegram_history,
+    "telegram_dialogs": tool_telegram_dialogs,
+    "telegram_delete": tool_telegram_delete,
+    "telegram_edit": tool_telegram_edit,
+    "telegram_resolve": tool_telegram_resolve,
 }
 
 

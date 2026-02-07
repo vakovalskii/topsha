@@ -1,0 +1,669 @@
+{
+  "meta": {
+    "version": "1.0",
+    "created": "2026-02-07",
+    "description": "Тестовые сценарии для LocalTopSH Agent с ожидаемыми результатами и выявленными проблемами"
+  },
+  "test_scenarios": [
+    {
+      "id": 1,
+      "category": "sandbox",
+      "prompt": "Запусти python скрипт который выводит числа от 1 до 10",
+      "expected_result": "Агент должен создать и выполнить Python скрипт, вывести числа 1-10",
+      "expected_tools": ["run_command"],
+      "actual_status": "passed",
+      "notes": "Работает стабильно"
+    },
+    {
+      "id": 2,
+      "category": "sandbox",
+      "prompt": "Установи библиотеку requests через pip и покажи её версию",
+      "expected_result": "pip install requests, затем показать версию",
+      "expected_tools": ["run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 3,
+      "category": "sandbox",
+      "prompt": "Создай виртуальное окружение venv и активируй его",
+      "expected_result": "python -m venv venv, объяснить как активировать",
+      "expected_tools": ["run_command"],
+      "actual_status": "passed",
+      "notes": "Агент создаёт venv, но не может активировать (ограничение sandbox)"
+    },
+    {
+      "id": 4,
+      "category": "sandbox",
+      "prompt": "Склонируй репозиторий https://github.com/psf/requests и покажи его структуру",
+      "expected_result": "git clone, затем ls или list_directory",
+      "expected_tools": ["run_command", "list_directory"],
+      "actual_status": "passed",
+      "notes": "Может падать при долгом клонировании"
+    },
+    {
+      "id": 5,
+      "category": "sandbox",
+      "prompt": "Напиши и запусти Node.js скрипт который делает HTTP запрос к httpbin.org/get",
+      "expected_result": "Создать .js файл, запустить node",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "partial",
+      "notes": "Node.js может быть не установлен в sandbox",
+      "improvement": "Добавить node в базовый образ sandbox или проверять наличие"
+    },
+    {
+      "id": 6,
+      "category": "file_ops",
+      "prompt": "Создай файл notes.txt с текстом 'Hello World' и прочитай его",
+      "expected_result": "write_file → read_file, показать содержимое",
+      "expected_tools": ["write_file", "read_file"],
+      "actual_status": "passed",
+      "notes": "Работает стабильно"
+    },
+    {
+      "id": 7,
+      "category": "file_ops",
+      "prompt": "Найди все .py файлы в текущей директории",
+      "expected_result": "search_files с паттерном *.py или **/*.py",
+      "expected_tools": ["search_files"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 8,
+      "category": "file_ops",
+      "prompt": "Создай структуру папок project/src/utils и файл main.py внутри src",
+      "expected_result": "mkdir -p или run_command, затем write_file",
+      "expected_tools": ["run_command", "write_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 9,
+      "category": "file_ops",
+      "prompt": "Найди все файлы содержащие слово 'TODO' в текущей директории",
+      "expected_result": "search_text с паттерном TODO",
+      "expected_tools": ["search_text"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 10,
+      "category": "file_ops",
+      "prompt": "Отредактируй файл notes.txt - замени 'Hello' на 'Goodbye'",
+      "expected_result": "read_file → edit_file с заменой",
+      "expected_tools": ["read_file", "edit_file"],
+      "actual_status": "passed",
+      "notes": "Работает, но зависит от предыдущего теста (файл должен существовать)"
+    },
+    {
+      "id": 11,
+      "category": "web_search",
+      "prompt": "Найди в интернете текущий курс биткоина",
+      "expected_result": "search_web → показать актуальный курс BTC",
+      "expected_tools": ["search_web"],
+      "actual_status": "passed",
+      "notes": "Работает отлично"
+    },
+    {
+      "id": 12,
+      "category": "web_search",
+      "prompt": "Найди последние новости про искусственный интеллект",
+      "expected_result": "search_web → краткий дайджест новостей",
+      "expected_tools": ["search_web"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 13,
+      "category": "web_search",
+      "prompt": "Найди документацию по FastAPI и сохрани основные моменты в файл",
+      "expected_result": "search_web → fetch_page → write_file",
+      "expected_tools": ["search_web", "fetch_page", "write_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 14,
+      "category": "web_search",
+      "prompt": "Скачай содержимое страницы https://example.com и сохрани в файл",
+      "expected_result": "fetch_page → write_file",
+      "expected_tools": ["fetch_page", "write_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 15,
+      "category": "web_search",
+      "prompt": "Найди рецепт борща и сохрани его в recipe.md",
+      "expected_result": "search_web → fetch_page → write_file в markdown",
+      "expected_tools": ["search_web", "fetch_page", "write_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 16,
+      "category": "scheduler",
+      "prompt": "Создай задачу которая каждые 5 минут проверяет курс доллара",
+      "expected_result": "schedule_task с type=agent, recurring=true, interval_minutes=5",
+      "expected_tools": ["schedule_task"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 17,
+      "category": "scheduler",
+      "prompt": "Напомни мне через 10 минут про встречу",
+      "expected_result": "schedule_task с type=message, delay_minutes=10",
+      "expected_tools": ["schedule_task"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 18,
+      "category": "scheduler",
+      "prompt": "Покажи все запланированные задачи",
+      "expected_result": "schedule_task с action=list",
+      "expected_tools": ["schedule_task"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 19,
+      "category": "scheduler",
+      "prompt": "Создай ежечасную задачу для проверки доступности сайта google.com",
+      "expected_result": "schedule_task с interval_minutes=60",
+      "expected_tools": ["schedule_task"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 20,
+      "category": "scheduler",
+      "prompt": "Отмени все запланированные задачи",
+      "expected_result": "schedule_task action=list → cancel для каждой",
+      "expected_tools": ["schedule_task"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 21,
+      "category": "memory",
+      "prompt": "Запомни что мой любимый язык программирования - Python",
+      "expected_result": "memory action=append",
+      "expected_tools": ["memory"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 22,
+      "category": "memory",
+      "prompt": "Что ты помнишь обо мне?",
+      "expected_result": "memory action=read → показать сохранённое",
+      "expected_tools": ["memory"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 23,
+      "category": "memory",
+      "prompt": "Очисти всю память",
+      "expected_result": "memory action=clear",
+      "expected_tools": ["memory"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 24,
+      "category": "tasks",
+      "prompt": "Создай список задач: 1) Изучить Docker 2) Написать тесты 3) Задеплоить приложение",
+      "expected_result": "manage_tasks action=add для каждой задачи",
+      "expected_tools": ["manage_tasks"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 25,
+      "category": "tasks",
+      "prompt": "Покажи все мои задачи и отметь первую как выполненную",
+      "expected_result": "manage_tasks action=list → action=update status=done",
+      "expected_tools": ["manage_tasks"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 26,
+      "category": "skills",
+      "prompt": "Покажи какие скиллы установлены",
+      "expected_result": "list_skills installed_only=true",
+      "expected_tools": ["list_skills"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 27,
+      "category": "skills",
+      "prompt": "Установи скилл для создания презентаций (pptx)",
+      "expected_result": "install_skill name=pptx",
+      "expected_tools": ["install_skill"],
+      "actual_status": "passed",
+      "notes": "Работает, если скилл ещё не установлен"
+    },
+    {
+      "id": 28,
+      "category": "skills",
+      "prompt": "Установи скилл для работы с Word документами",
+      "expected_result": "install_skill name=docx",
+      "expected_tools": ["install_skill"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 29,
+      "category": "skills",
+      "prompt": "Какие скиллы доступны для установки?",
+      "expected_result": "list_skills → показать available",
+      "expected_tools": ["list_skills"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 30,
+      "category": "presentation",
+      "prompt": "Создай презентацию из 3 слайдов про машинное обучение",
+      "expected_result": "Использовать pptx skill, создать .pptx файл",
+      "expected_tools": ["read_file", "run_command", "write_file"],
+      "actual_status": "partial",
+      "notes": "Требует установленный pptx skill и правильное следование инструкциям",
+      "improvement": "Улучшить промпт skill'а для более чёткого понимания"
+    },
+    {
+      "id": 31,
+      "category": "presentation",
+      "prompt": "Создай презентацию про историю Python с картинками",
+      "expected_result": "search_web для картинок → pptx skill",
+      "expected_tools": ["search_web", "read_file", "run_command"],
+      "actual_status": "partial",
+      "notes": "Сложный сценарий, требует много шагов",
+      "improvement": "Добавить примеры в skill инструкции"
+    },
+    {
+      "id": 32,
+      "category": "analysis",
+      "prompt": "Проанализируй этот JSON файл и выведи статистику: {\"users\": [{\"name\": \"John\", \"age\": 25}, {\"name\": \"Jane\", \"age\": 30}]}",
+      "expected_result": "Написать Python скрипт для анализа JSON",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 33,
+      "category": "analysis",
+      "prompt": "Создай CSV файл с данными о продажах и построй график",
+      "expected_result": "Создать CSV, установить matplotlib, построить график",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "partial",
+      "notes": "Может не хватить библиотек в sandbox",
+      "improvement": "Добавить matplotlib в базовый образ"
+    },
+    {
+      "id": 34,
+      "category": "analysis",
+      "prompt": "Посчитай количество строк кода во всех Python файлах",
+      "expected_result": "search_files → wc -l или Python скрипт",
+      "expected_tools": ["search_files", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 35,
+      "category": "analysis",
+      "prompt": "Найди самый большой файл в текущей директории",
+      "expected_result": "ls -lS или du команда",
+      "expected_tools": ["run_command", "list_directory"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 36,
+      "category": "docker",
+      "prompt": "Покажи запущенные Docker контейнеры",
+      "expected_result": "Использовать MCP docker_ps tool",
+      "expected_tools": ["mcp:docker_ps"],
+      "actual_status": "failed",
+      "notes": "Агент пытается запустить docker ps в sandbox вместо MCP tool",
+      "improvement": "Добавить в system prompt что для Docker нужно использовать MCP tools, не run_command"
+    },
+    {
+      "id": 37,
+      "category": "docker",
+      "prompt": "Покажи логи контейнера core за последние 50 строк",
+      "expected_result": "MCP docker_logs tool",
+      "expected_tools": ["mcp:docker_logs"],
+      "actual_status": "failed",
+      "notes": "Та же проблема - идёт в sandbox",
+      "improvement": "Улучшить routing к MCP tools"
+    },
+    {
+      "id": 38,
+      "category": "docker",
+      "prompt": "Какие Docker образы есть на сервере?",
+      "expected_result": "MCP docker_images tool",
+      "expected_tools": ["mcp:docker_images"],
+      "actual_status": "failed",
+      "notes": "Агент не знает про MCP docker tools",
+      "improvement": "Добавить MCP tools в system prompt или сделать их более discoverable"
+    },
+    {
+      "id": 39,
+      "category": "docker",
+      "prompt": "Перезапусти контейнер bot",
+      "expected_result": "MCP docker_restart tool",
+      "expected_tools": ["mcp:docker_restart"],
+      "actual_status": "failed",
+      "notes": "Требует MCP tool",
+      "improvement": "Научить агента использовать MCP tools"
+    },
+    {
+      "id": 40,
+      "category": "coding",
+      "prompt": "Напиши Python функцию для сортировки списка и протестируй её",
+      "expected_result": "write_file с функцией → run_command python",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 41,
+      "category": "coding",
+      "prompt": "Создай простой REST API на Flask с одним эндпоинтом",
+      "expected_result": "pip install flask → write_file → объяснить как запустить",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 42,
+      "category": "coding",
+      "prompt": "Напиши скрипт который парсит JSON из URL и сохраняет в файл",
+      "expected_result": "Python скрипт с requests",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 43,
+      "category": "coding",
+      "prompt": "Создай bash скрипт для бэкапа всех .txt файлов",
+      "expected_result": "write_file .sh → chmod +x",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 44,
+      "category": "coding",
+      "prompt": "Напиши unit тесты для функции сложения двух чисел",
+      "expected_result": "Python unittest или pytest",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 45,
+      "category": "complex",
+      "prompt": "Найди в интернете погоду в Москве и создай задачу проверять её каждый час",
+      "expected_result": "search_web → schedule_task",
+      "expected_tools": ["search_web", "schedule_task"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 46,
+      "category": "complex",
+      "prompt": "Склонируй репозиторий, найди все TODO комментарии и создай задачи для каждого",
+      "expected_result": "git clone → search_text TODO → manage_tasks",
+      "expected_tools": ["run_command", "search_text", "manage_tasks"],
+      "actual_status": "partial",
+      "notes": "Долгий процесс, может таймаутить",
+      "improvement": "Увеличить таймаут или разбить на шаги"
+    },
+    {
+      "id": 47,
+      "category": "complex",
+      "prompt": "Создай отчёт о системе: CPU, память, диск - и сохрани в system_report.md",
+      "expected_result": "Несколько run_command → write_file",
+      "expected_tools": ["run_command", "write_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 48,
+      "category": "complex",
+      "prompt": "Напиши скрипт мониторинга который проверяет доступность списка сайтов",
+      "expected_result": "Python скрипт с requests/urllib",
+      "expected_tools": ["write_file", "run_command"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 49,
+      "category": "tools",
+      "prompt": "Какие инструменты у тебя есть? Найди все связанные с Docker",
+      "expected_result": "search_tools query=docker",
+      "expected_tools": ["search_tools"],
+      "actual_status": "partial",
+      "notes": "Агент перечисляет tools, но не всегда использует search_tools",
+      "improvement": "Улучшить описание search_tools"
+    },
+    {
+      "id": 50,
+      "category": "tools",
+      "prompt": "Покажи все доступные MCP инструменты",
+      "expected_result": "search_tools source=mcp",
+      "expected_tools": ["search_tools"],
+      "actual_status": "partial",
+      "notes": "Агент не всегда понимает что такое MCP",
+      "improvement": "Добавить объяснение MCP в system prompt"
+    },
+    {
+      "id": 51,
+      "category": "telegram",
+      "prompt": "Прочитай последние 3 поста из канала @NeuralShit",
+      "expected_result": "telegram_channel channel=@NeuralShit limit=3",
+      "expected_tools": ["telegram_channel"],
+      "actual_status": "passed",
+      "notes": "Работает отлично после добавления telegram tools"
+    },
+    {
+      "id": 52,
+      "category": "telegram",
+      "prompt": "Подпишись на канал https://t.me/durov",
+      "expected_result": "telegram_join invite_link=...",
+      "expected_tools": ["telegram_join"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 53,
+      "category": "telegram",
+      "prompt": "Покажи мои последние диалоги",
+      "expected_result": "telegram_dialogs",
+      "expected_tools": ["telegram_dialogs"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 54,
+      "category": "telegram",
+      "prompt": "Отправь сообщение 'Привет!' пользователю @durov",
+      "expected_result": "telegram_send target=@durov message=Привет!",
+      "expected_tools": ["telegram_send"],
+      "actual_status": "partial",
+      "notes": "Работает, но Telegram может блокировать спам",
+      "improvement": "Добавить проверку на спам-лимиты"
+    },
+    {
+      "id": 55,
+      "category": "telegram",
+      "prompt": "Покажи историю сообщений в текущем чате",
+      "expected_result": "telegram_history chat_id=...",
+      "expected_tools": ["telegram_history"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 56,
+      "category": "telegram",
+      "prompt": "Найди последние новости в канале @raboravno и перескажи",
+      "expected_result": "telegram_channel → пересказ",
+      "expected_tools": ["telegram_channel"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 57,
+      "category": "telegram",
+      "prompt": "Прочитай что пишут в @habr_com за последний час",
+      "expected_result": "telegram_channel с фильтрацией по времени",
+      "expected_tools": ["telegram_channel"],
+      "actual_status": "partial",
+      "notes": "Читает посты, но не фильтрует по времени",
+      "improvement": "Добавить параметр since в telegram_channel"
+    },
+    {
+      "id": 58,
+      "category": "telegram",
+      "prompt": "Напиши в личку @username что я буду через 10 минут",
+      "expected_result": "telegram_send",
+      "expected_tools": ["telegram_send"],
+      "actual_status": "partial",
+      "notes": "Зависит от прав доступа в Telegram"
+    },
+    {
+      "id": 59,
+      "category": "telegram",
+      "prompt": "Создай задачу каждый час проверять канал @cryptonews и присылать мне дайджест",
+      "expected_result": "schedule_task с type=agent, content использует telegram_channel",
+      "expected_tools": ["schedule_task", "telegram_channel"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 60,
+      "category": "telegram",
+      "prompt": "Найди все каналы про AI в моих подписках",
+      "expected_result": "telegram_dialogs → фильтрация по названию",
+      "expected_tools": ["telegram_dialogs"],
+      "actual_status": "partial",
+      "notes": "Показывает диалоги, но не всегда фильтрует правильно",
+      "improvement": "Добавить search параметр в telegram_dialogs"
+    },
+    {
+      "id": 61,
+      "category": "telegram_bot",
+      "prompt": "Отправь мне файл notes.txt в личку",
+      "expected_result": "send_file path=notes.txt",
+      "expected_tools": ["send_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 62,
+      "category": "telegram_bot",
+      "prompt": "Напиши мне в ЛС 'Привет, это тест!'",
+      "expected_result": "send_dm text=...",
+      "expected_tools": ["send_dm"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 63,
+      "category": "telegram_bot",
+      "prompt": "Удали своё последнее сообщение",
+      "expected_result": "manage_message action=delete",
+      "expected_tools": ["manage_message"],
+      "actual_status": "partial",
+      "notes": "Telegram ограничивает удаление старых сообщений"
+    },
+    {
+      "id": 64,
+      "category": "telegram_complex",
+      "prompt": "Найди в интернете курс доллара, потом проверь что пишут в @bankiru и сравни данные",
+      "expected_result": "search_web → telegram_channel → сравнение",
+      "expected_tools": ["search_web", "telegram_channel"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    },
+    {
+      "id": 65,
+      "category": "telegram_complex",
+      "prompt": "Прочитай последний пост из @NeuralShit, сохрани его в файл и отправь мне",
+      "expected_result": "telegram_channel → write_file → send_file",
+      "expected_tools": ["telegram_channel", "write_file", "send_file"],
+      "actual_status": "passed",
+      "notes": "Работает"
+    }
+  ],
+  "summary": {
+    "total": 65,
+    "passed": 48,
+    "partial": 13,
+    "failed": 4,
+    "pass_rate": "74%"
+  },
+  "identified_issues": [
+    {
+      "issue": "MCP Docker tools не используются",
+      "affected_tests": [36, 37, 38, 39],
+      "root_cause": "Агент не знает про MCP tools и пытается запустить docker в sandbox",
+      "fix": "Добавить в system prompt информацию о MCP tools для Docker"
+    },
+    {
+      "issue": "Node.js не установлен в sandbox",
+      "affected_tests": [5],
+      "root_cause": "Базовый образ sandbox не содержит Node.js",
+      "fix": "Добавить node в Dockerfile sandbox или проверять наличие"
+    },
+    {
+      "issue": "Таймауты на долгих операциях",
+      "affected_tests": [4, 46],
+      "root_cause": "git clone больших репозиториев занимает много времени",
+      "fix": "Увеличить таймаут или использовать shallow clone"
+    },
+    {
+      "issue": "search_tools не всегда используется",
+      "affected_tests": [49, 50],
+      "root_cause": "Агент предпочитает перечислять tools из памяти",
+      "fix": "Улучшить описание search_tools"
+    },
+    {
+      "issue": "Telegram time filtering",
+      "affected_tests": [57],
+      "root_cause": "telegram_channel не поддерживает фильтрацию по времени",
+      "fix": "Добавить параметр since/after в telegram_channel"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "high",
+      "area": "system_prompt",
+      "action": "Добавить секцию про MCP tools с примерами использования docker tools"
+    },
+    {
+      "priority": "medium",
+      "area": "sandbox",
+      "action": "Добавить Node.js и matplotlib в базовый образ"
+    },
+    {
+      "priority": "medium",
+      "area": "telegram_tools",
+      "action": "Добавить параметры фильтрации (since, search) в telegram_channel и telegram_dialogs"
+    },
+    {
+      "priority": "low",
+      "area": "tools",
+      "action": "Улучшить описания tools для лучшего понимания агентом"
+    }
+  ]
+}

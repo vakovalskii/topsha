@@ -95,6 +95,10 @@ export const addMcpServer = (server) => fetchApi('/mcp/servers', {
   body: JSON.stringify(server)
 })
 export const removeMcpServer = (name) => fetchApi(`/mcp/servers/${name}`, { method: 'DELETE' })
+export const toggleMcpServer = (name, enabled) => fetchApi(`/mcp/servers/${name}/toggle`, {
+  method: 'PUT',
+  body: JSON.stringify({ enabled })
+})
 export const refreshMcpServer = (name) => fetchApi(`/mcp/servers/${name}/refresh`, { method: 'POST' })
 export const refreshAllMcp = () => fetchApi('/mcp/refresh-all', { method: 'POST' })
 

@@ -87,6 +87,37 @@ async def remove_mcp_server(name: str):
     return {"success": True, "name": name}
 
 
+class MCPServerToggle(BaseModel):
+    enabled: bool
+
+
+@router.put("/servers/{name}/toggle")
+async def toggle_mcp_server(name: str, data: MCPServerToggle):
+    """Enable or disable an MCP server"""
+    servers = load_mcp_config()
+    
+    if name not in servers:
+        raise HTTPException(404, f"Server {name} not found")
+    
+    servers[name].enabled = data.enabled
+    save_mcp_config(servers)
+    
+    if data.enabled:
+        # Refresh tools when enabling
+        tools = await fetch_mcp_tools(servers[name])
+        if tools:
+            mcp_cache.add_tools(name, tools)
+            mcp_cache.server_status[name] = {"connected": True, "tool_count": len(tools)}
+    else:
+        # Clear tools when disabling
+        mcp_cache.clear_server_tools(name)
+        mcp_cache.server_status[name] = {"connected": False, "disabled": True}
+    
+    mcp_cache.save_cache()
+    
+    return {"success": True, "name": name, "enabled": data.enabled}
+
+
 @router.post("/servers/{name}/refresh")
 async def refresh_mcp_server(name: str):
     """Refresh tools from an MCP server"""
