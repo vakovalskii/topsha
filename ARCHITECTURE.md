@@ -73,6 +73,12 @@ LocalTopSH — AI Agent Framework для self-hosted LLM. Позволяет р�
 | **tools-api** | 8100 | Python 3.11 | Tool registry, MCP integration, Skills | `/data`, `/workspace` |
 | **admin** | 3000 | nginx + React | Web admin panel (Basic Auth) | - |
 
+### Scheduler
+
+| Service | Port | Role | Features |
+|---------|------|------|----------|
+| **scheduler** | 8400 | Persistent task scheduling | Survives restarts, recurring tasks, JSON storage |
+
 ### MCP Servers
 
 | Service | Port | Role | Tools |

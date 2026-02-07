@@ -67,6 +67,31 @@ services:
           cpus: '0.2'
           memory: 128M
 
+  # ============ SCHEDULER - Persistent task scheduling ============
+  scheduler:
+    build: ./scheduler
+    container_name: scheduler
+    restart: unless-stopped
+    environment:
+      - DATA_DIR=/data
+      - CORE_URL=http://core:4000
+      - BOT_URL=http://bot:4001
+    volumes:
+      - ./workspace/_shared:/data  # Persistent task storage
+    networks:
+      - agent-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8400/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
   # ============ DOCKER MCP - Docker management via MCP ============
   docker-mcp:
     build: ./docker-mcp
@@ -99,9 +124,12 @@ services:
         condition: service_healthy
       tools-api:
         condition: service_healthy
+      scheduler:
+        condition: service_healthy
     environment:
       - PROXY_URL=http://proxy:3200
       - TOOLS_API_URL=http://tools-api:8100
+      - SCHEDULER_URL=http://scheduler:8400
       - WORKSPACE=/workspace
       - WORKSPACE_HOST_PATH=${PWD}/workspace
       - EXPOSED_PORTS=5000-5099

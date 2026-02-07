@@ -156,18 +156,18 @@ SHARED_TOOLS = {
     "schedule_task": {
         "enabled": True,
         "name": "schedule_task",
-        "description": "Schedule reminders or recurring tasks.",
+        "description": "Schedule tasks via scheduler service. Actions: 'add' - create task, 'list' - show tasks, 'cancel' - remove task, 'run' - execute immediately. Tasks persist across restarts.",
         "source": "builtin",
         "parameters": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["add", "list", "cancel"]},
-                "type": {"type": "string", "enum": ["message", "command", "agent"]},
-                "content": {"type": "string", "description": "Task content"},
-                "delay_minutes": {"type": "integer", "description": "Delay before execution"},
-                "recurring": {"type": "boolean", "description": "Repeat task"},
-                "interval_minutes": {"type": "integer", "description": "Repeat interval"},
-                "task_id": {"type": "string", "description": "Task ID for cancel"}
+                "action": {"type": "string", "enum": ["add", "list", "cancel", "run"], "description": "Action to perform"},
+                "type": {"type": "string", "enum": ["message", "agent"], "description": "Task type: 'message' sends reminder, 'agent' runs agent with content"},
+                "content": {"type": "string", "description": "Task content/message"},
+                "delay_minutes": {"type": "integer", "description": "Delay before first execution (default: 1)"},
+                "recurring": {"type": "boolean", "description": "Repeat task after execution"},
+                "interval_minutes": {"type": "integer", "description": "Repeat interval in minutes"},
+                "task_id": {"type": "string", "description": "Task ID for cancel/run actions"}
             },
             "required": ["action"]
         }
