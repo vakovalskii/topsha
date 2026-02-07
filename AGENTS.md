@@ -156,6 +156,16 @@ cat workspace/_shared/pairing.json
 
 ## Troubleshooting
 
+### Bot not responding / No requests to model API
+
+Access is checked in two places: in the **bot** (who can send messages) and in **core** (who gets agent/LLM). If core denies access, the bot gets `access_denied`, shows a block reaction, and the request never reaches the proxy/LLM.
+
+1. Set your Telegram user ID as admin: in `.env` or docker-compose set `ADMIN_USER_ID=<your_telegram_id>`. Get your ID from @userinfobot or from bot logs when you send a message.
+2. For "anyone can use" set `ACCESS_MODE=public` (default in docker-compose). Core then uses the same env for its default config (no admin_config.json).
+3. If you use Admin panel (port 3002): Config / Access - set Mode to "Public" or add your user_id to allowlist; ensure "Bot enabled" is on.
+4. Check core logs: `docker logs core --tail 50`. Look for "Access denied for &lt;user_id&gt;" - if present, adjust admin_id or mode as above.
+5. If you already have `workspace/_shared/admin_config.json`, either remove it so env defaults apply after restart, or set Access mode and admin in Admin panel (Config / Access).
+
 ### Server Down
 
 1. `docker ps` - all containers should be Up
