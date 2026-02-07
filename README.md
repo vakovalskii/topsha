@@ -365,6 +365,6 @@ MIT
 
 ## Links
 
+- **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md) — detailed system design
+- **Security**: [SECURITY.md](SECURITY.md) — security model and patterns
 - **Telegram**: [@neuraldeepchat](https://t.me/neuraldeepchat)
-- **Security**: [SECURITY.md](SECURITY.md)
-- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
