@@ -232,6 +232,13 @@ async def start_service(name: str):
 
 CONFIG_FILE = "/workspace/_shared/admin_config.json"
 
+
+def _default_access_mode() -> str:
+    """Map env ACCESS_MODE to core mode (bot uses 'admin', core uses 'admin_only')."""
+    mode = os.getenv("ACCESS_MODE", "admin_only")
+    return "admin_only" if mode == "admin" else mode
+
+
 def load_config():
     """Load config from file"""
     default = {
@@ -263,8 +270,8 @@ def load_config():
         "access": {
             "bot_enabled": True,
             "userbot_enabled": True,
-            "mode": "admin_only",  # "public", "admin_only", "allowlist"
-            "admin_id": 809532582,
+            "mode": _default_access_mode(),
+            "admin_id": int(os.getenv("ADMIN_USER_ID", "809532582")),
             "allowlist": []  # list of user_ids
         }
     }
