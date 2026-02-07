@@ -100,8 +100,23 @@ docker compose logs -f
 ### 4. Access
 
 - **Telegram Bot**: Message your bot
-- **Admin Panel**: http://localhost:3000
+- **Admin Panel**: http://localhost:3000 (login: admin / password from `secrets/admin_password.txt`)
 - **API**: http://localhost:4000/api
+
+### 5. Configure Admin Panel Auth (Important!)
+
+```bash
+# Change default admin password (REQUIRED for production!)
+echo "your-secure-password" > secrets/admin_password.txt
+
+# Optionally change admin username via environment variable
+# Edit docker-compose.yml and set ADMIN_USER=your_username
+
+# Rebuild admin container
+docker compose up -d --build admin
+```
+
+> ⚠️ **Default credentials: admin / changeme123** — change them before exposing to network!
 
 ---
 
@@ -208,6 +223,7 @@ python scripts/e2e_test.py --verbose
 | `api_key.txt` | ✅ | LLM API key (use `dummy` if not required) |
 | `model_name.txt` | ✅ | Model name (e.g. `gpt-oss-120b`) |
 | `zai_api_key.txt` | ✅ | Z.AI search key |
+| `admin_password.txt` | ✅ | Admin panel password (default: `changeme123`) |
 
 ### Environment Examples
 
@@ -239,7 +255,25 @@ echo "your-model-name" > secrets/model_name.txt
 
 ## Admin Panel
 
-Web panel at `:3000` for managing the system:
+Web panel at `:3000` for managing the system (protected by Basic Auth):
+
+### Authentication
+
+```bash
+# Default credentials
+Username: admin
+Password: (from secrets/admin_password.txt, default: changeme123)
+
+# Change password
+echo "your-secure-password" > secrets/admin_password.txt
+docker compose up -d --build admin
+
+# Change username (optional)
+# In docker-compose.yml, set environment variable:
+# ADMIN_USER=your_username
+```
+
+### Pages
 
 | Page | Features |
 |------|----------|
@@ -252,6 +286,17 @@ Web panel at `:3000` for managing the system:
 | **Skills** | Install/manage skills |
 | **Users** | Sessions, chat history |
 | **Logs** | Real-time service logs |
+
+### Remote Access (SSH Tunnel)
+
+Admin panel is bound to `127.0.0.1:3000` for security. For remote access:
+
+```bash
+# On your local machine
+ssh -L 3000:localhost:3000 user@your-server
+
+# Then open http://localhost:3000 in browser
+```
 
 ---
 

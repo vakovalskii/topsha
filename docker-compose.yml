@@ -195,18 +195,28 @@ services:
           memory: 256M
 
   # ============ ADMIN - React Web Panel ============
-  # SECURITY: Bound to localhost only - use SSH tunnel for remote access
+  # SECURITY: Basic Auth + localhost binding. Use SSH tunnel for remote access
   admin:
     build: ./admin
     container_name: admin
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"  # localhost only!
+    environment:
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD_FILE=/run/secrets/admin_password
+    secrets:
+      - admin_password
     depends_on:
       core:
         condition: service_healthy
     networks:
       - agent-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -235,6 +245,8 @@ secrets:
     file: ./secrets/telegram_phone.txt
   model_name:
     file: ./secrets/model_name.txt
+  admin_password:
+    file: ./secrets/admin_password.txt
 
 networks:
   agent-net:
