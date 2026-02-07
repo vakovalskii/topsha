@@ -57,21 +57,14 @@ class SecurityDoctor:
     def run_all_checks(self):
         """Run all security checks"""
         print(f"""
-{BOLD}⛧ LocalTopSH Security Doctor ⛧{RESET}
+{BOLD}🛡️ LocalTopSH Security Doctor{RESET}
 
-              🔐 ACCESS
-                 ╱╲
-                ╱  ╲
-               ╱ ⛧  ╲
-              ╱  👁️  ╲
-       🛡️ INPUT ────── OUTPUT 🔒
-            ╲  ╱╲  ╱
-             ╲╱⛧ ╲╱
-             ╱╲  ╱╲
-            ╱  ╲╱  ╲
-     🐳 SANDBOX ── SECRETS 🗝️
-
-{BLUE}"Per aspera ad securitatem"{RESET}
+Checking 5 layers of protection:
+  • ACCESS   - DM Policy configuration
+  • INPUT    - Blocked patterns & injection defense
+  • SANDBOX  - Docker isolation & resource limits
+  • SECRETS  - Proxy architecture & key protection
+  • OUTPUT   - Sanitization & encoding detection
 """)
         print("=" * 60)
         
@@ -418,16 +411,16 @@ class SecurityDoctor:
         # Overall status
         print()
         if critical > 0:
-            print(f"{RED}{BOLD}⛧ THE PENTAGRAM IS BROKEN ⛧{RESET}")
-            print(f"{RED}   Fix critical issues to restore protection!{RESET}")
+            print(f"{RED}{BOLD}❌ SECURITY COMPROMISED{RESET}")
+            print(f"{RED}   Fix critical issues immediately!{RESET}")
             return 1
         elif high > 0:
-            print(f"{YELLOW}{BOLD}⛧ THE PENTAGRAM WAVERS ⛧{RESET}")
-            print(f"{YELLOW}   Review high issues to strengthen the seals{RESET}")
+            print(f"{YELLOW}{BOLD}⚠️  SECURITY WARNINGS{RESET}")
+            print(f"{YELLOW}   Review high-severity issues{RESET}")
             return 0
         else:
-            print(f"{GREEN}{BOLD}⛧ THE PENTAGRAM HOLDS ⛧{RESET}")
-            print(f"{GREEN}   All seals intact. Protection active.{RESET}")
+            print(f"{GREEN}{BOLD}✅ ALL CHECKS PASSED{RESET}")
+            print(f"{GREEN}   Security configuration is solid.{RESET}")
             return 0
     
     def to_json(self) -> str:

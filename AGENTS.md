@@ -1,115 +1,97 @@
-# LocalTopSH Agent Evolution
+# LocalTopSH Agent Guide
 
-## Что это
-Telegram бот с ReAct агентом, который дает пользователям доступ к изолированному Linux окружению.
-Протестирован 1500+ хакерами в группе @neuraldeepchat в течение 7 часов.
-Результат: 0 утечек секретов, 0 даунтайма.
+## Overview
 
-## Security Model — The Pentagram 🔮
+Telegram бот с ReAct агентом, который даёт пользователям доступ к изолированному Linux окружению.
 
-```
-                           ⛧ THE SECURITY PENTAGRAM ⛧
-                        
-                                 🔐 ACCESS
-                                    ╱╲
-                                   ╱  ╲
-                                  ╱    ╲
-                                 ╱  ⛧   ╲
-                                ╱        ╲
-                               ╱    👁️    ╲
-                              ╱   AGENT    ╲
-                      🛡️ INPUT ────────────── OUTPUT 🔒
-                            ╲      ╱╲      ╱
-                             ╲    ╱  ╲    ╱
-                              ╲  ╱    ╲  ╱
-                               ╲╱  ⛧   ╲╱
-                               ╱╲      ╱╲
-                              ╱  ╲    ╱  ╲
-                             ╱    ╲  ╱    ╲
-                            ╱      ╲╱      ╲
-                     🐳 SANDBOX ──────── SECRETS 🗝️
-                        
-           "Per aspera ad securitatem" — Through hardship to security
-```
+**Battle-tested:** 1500+ хакеров, 7 часов стресс-теста, 0 утечек, 0 даунтайма.
 
-### The Five Points of Protection
+## Security Model
 
-| Point | Guardian | Power | Patterns |
-|-------|----------|-------|----------|
-| 🔐 **ACCESS** | DM Policy | Who enters the circle | pairing/allowlist |
-| 🛡️ **INPUT** | Validators | What darkness they bring | 247 + 19 patterns |
-| 🐳 **SANDBOX** | Docker | Contain the chaos | 512MB, 50% CPU |
-| 🗝️ **SECRETS** | Proxy | Keys remain hidden | 0 secrets in agent |
-| 🔒 **OUTPUT** | Sanitizer | Nothing escapes unseen | base64/hex detect |
+### Five Layers of Protection
 
-## Цикл эволюции — The Eternal Vigil 🕯️
+| Layer | Component | Function | Details |
+|-------|-----------|----------|---------|
+| **ACCESS** | DM Policy | Who can use | admin/allowlist/pairing/public |
+| **INPUT** | Validators | What they send | 247 + 19 patterns |
+| **SANDBOX** | Docker | Isolation | 512MB, 50% CPU, 100 PIDs |
+| **SECRETS** | Proxy | Key protection | 0 secrets in agent |
+| **OUTPUT** | Sanitizer | What goes out | base64/hex detection |
 
-```
-              ╭─────────────────────────────────────╮
-              │         ① 👁️ OBSERVE               │
-              │    "Watch the shadows move"        │
-              │    docker logs -f | grep SECURITY  │
-              ╰──────────────┬──────────────────────╯
-                             │
-         ╭───────────────────┼───────────────────╮
-         │                   │                   │
-         ▼                   ▼                   ▼
-    ┌─────────┐        ┌─────────┐        ┌─────────┐
-    │[BLOCKED]│        │[INJECT] │        │ [DENY]  │
-    │ Command │        │ Prompt  │        │  Tool   │
-    └────┬────┘        └────┬────┘        └────┬────┘
-         │                   │                   │
-         ╰───────────────────┼───────────────────╯
-                             │
-              ╭──────────────▼──────────────────────╮
-              │         ② 🔮 DIVINE                │
-              │    "Understand the attack"         │
-              │    Analyze pattern, find weakness  │
-              ╰──────────────┬──────────────────────╯
-                             │
-              ╭──────────────▼──────────────────────╮
-              │         ③ ⚔️ FORTIFY               │
-              │    "Strengthen the seals"          │
-              │    Add pattern to blocked-*.json   │
-              ╰──────────────┬──────────────────────╯
-                             │
-              ╭──────────────▼──────────────────────╮
-              │         ④ 🔥 REBIRTH               │
-              │    "Rise anew, stronger"           │
-              │    docker compose up -d --build    │
-              ╰──────────────┬──────────────────────╯
-                             │
-              ╭──────────────▼──────────────────────╮
-              │         ⑤ ⛧ VERIFY                 │
-              │    "The Pentagram must hold"       │
-              │    python scripts/doctor.py        │
-              ╰──────────────┬──────────────────────╯
-                             │
-                             ╰──────────▶ ① (eternal loop)
-```
+### Architecture
 
-## Ключевые файлы для патчинга
+\`\`\`
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Gateway   │────▶│    Proxy    │────▶│  External   │
+│  (Bot+Agent)│     │ (API Keys)  │     │    APIs     │
+│  0 secrets  │     │             │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘
+       │
+       ▼
+┌─────────────┐
+│  /workspace │
+│  per-user   │
+│  isolated   │
+└─────────────┘
+\`\`\`
 
-| Файл | Что патчить |
-|------|-------------|
-| `core/src/approvals/blocked-patterns.json` | 247 security patterns |
-| `bot/prompt-injection-patterns.json` | 19 injection patterns |
-| `core/tools/permissions.py` | Tool allowlist/denylist |
-| `bot/access.py` | DM Policy (pairing/allowlist) |
-| `core/src/agent/system.txt` | Системный промпт |
-| `scripts/doctor.py` | Security audit CLI |
+## Evolution Cycle
+
+When monitoring and patching the system:
+
+\`\`\`
+┌─────────────────────────────────────────────────────────────────┐
+│                    EVOLUTION CYCLE                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. OBSERVE                                                     │
+│     └─ docker logs gateway -f | grep SECURITY                  │
+│     └─ Check CHAT_HISTORY.md for suspicious patterns           │
+│                                                                 │
+│  2. ANALYZE                                                     │
+│     └─ Identify attack vector                                  │
+│     └─ Understand bypass technique                             │
+│                                                                 │
+│  3. PATCH                                                       │
+│     └─ Add pattern to blocked-patterns.json                    │
+│     └─ Or update prompt-injection-patterns.json                │
+│     └─ Or modify system prompt                                 │
+│                                                                 │
+│  4. DEPLOY                                                      │
+│     └─ docker compose up -d --build                            │
+│                                                                 │
+│  5. VERIFY                                                      │
+│     └─ python scripts/doctor.py                                │
+│     └─ Test that attack is blocked                             │
+│     └─ Test that legitimate commands work                      │
+│                                                                 │
+│  6. REPEAT                                                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+## Key Files for Patching
+
+| File | What to patch |
+|------|---------------|
+| \`core/src/approvals/blocked-patterns.json\` | 247 security patterns |
+| \`bot/prompt-injection-patterns.json\` | 19 injection patterns |
+| \`core/tools/permissions.py\` | Tool allowlist/denylist |
+| \`bot/access.py\` | DM Policy (pairing/allowlist) |
+| \`core/src/agent/system.txt\` | System prompt |
+| \`scripts/doctor.py\` | Security audit CLI |
 
 ## Access Control Commands
 
-```bash
+\`\`\`bash
 # Show access status (admin only)
 /access
 
 # Change mode
 /access_mode admin      # Only admin
 /access_mode allowlist  # Admin + allowed users
-/access_mode pairing    # OpenClaw-style pairing codes
-/access_mode public     # Anyone (⚠️ risky)
+/access_mode pairing    # Pairing codes for approval
+/access_mode public     # Anyone (risky)
 
 # Approve pairing code
 /approve ABC123
@@ -119,11 +101,11 @@ Telegram бот с ReAct агентом, который дает пользов�
 
 # Add to allowlist
 /allow 123456789
-```
+\`\`\`
 
 ## Security Audit
 
-```bash
+\`\`\`bash
 # Run security doctor
 python scripts/doctor.py
 
@@ -139,7 +121,7 @@ python scripts/doctor.py --json
 # - File permissions
 # - Access mode
 # - Resource limits
-```
+\`\`\`
 
 ## Tool Permissions by Session Type
 
@@ -150,70 +132,64 @@ python scripts/doctor.py --json
 | **Sandbox** | 10 | telegram tools, scheduler |
 | **Userbot** | 13 | send_file, send_dm, manage_message, ask_user |
 
-## Архитектура безопасности
+## Monitoring Commands
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Gateway   │────▶│    Proxy    │────▶│  External   │
-│  (Bot+Agent)│     │ (API Keys)  │     │    APIs     │
-│  0 secrets  │     │  /run/sec/  │     │             │
-└─────────────┘     └─────────────┘     └─────────────┘
-       │
-       ▼
-┌─────────────┐
-│  /workspace │
-│  per-user   │
-│  isolated   │
-└─────────────┘
-```
-
-## Команды мониторинга
-
-```bash
+\`\`\`bash
 # Security audit
 python scripts/doctor.py
 
-# Логи в реальном времени
+# Real-time logs
 docker logs gateway -f --tail 100
 
-# Проверить что контейнеры живы
+# Check containers are running
 docker ps
 
-# Перезапуск после патча
+# Restart after patch
 docker compose down && docker compose up -d --build
 
-# Посмотреть историю чата
+# View chat history
 cat workspace/_shared/CHAT_HISTORY.md | tail -100
 
-# Посмотреть pairing коды (admin)
+# View pairing codes (admin)
 cat workspace/_shared/pairing.json
-```
+\`\`\`
 
-## При падении сервера
+## Troubleshooting
 
-1. `docker ps` - все контейнеры должны быть Up
-2. `docker logs gateway` - проверить ошибки
-3. `python scripts/doctor.py` - security audit
-4. Если OOM - увеличить memory limit в docker-compose.yml
-5. Если rate limit - увеличить интервалы в `src/config.ts`
+### Server Down
+
+1. \`docker ps\` - all containers should be Up
+2. \`docker logs gateway\` - check errors
+3. \`python scripts/doctor.py\` - security audit
+4. If OOM - increase memory limit in docker-compose.yml
+5. If rate limit - increase intervals in \`src/config.ts\`
+
+### Attack Detected
+
+1. Check logs for \`[SECURITY]\` or \`[BLOCKED]\` tags
+2. Identify the attack pattern
+3. Add to blocked-patterns.json or prompt-injection-patterns.json
+4. Rebuild and deploy
+5. Verify with doctor.py
 
 ## Centralized Config
 
-Все настройки в `src/config.ts`:
+All settings in \`src/config.ts\`:
 - Rate limits, timeouts, agent behavior
 - Reactions, thoughts, messages
 - Storage limits (chat history, memory)
 - Admin ID, valid emojis
 
-## Comparison with OpenClaw
+## Comparison with Similar Projects
 
 | Feature | LocalTopSH | OpenClaw |
 |---------|------------|----------|
-| DM Policy | ✅ admin/allowlist/public/pairing | ✅ pairing/allowlist/open |
-| Sandbox | ✅ Docker per-user | ✅ Docker per-session |
+| DM Policy | admin/allowlist/public/pairing | pairing/allowlist/open |
+| Sandbox | Docker per-user | Docker per-session |
 | Blocked Patterns | 247 | ~200 |
 | Prompt Injection | 19 patterns | ~20 patterns |
-| Tool Permissions | ✅ by session type | ✅ similar |
-| Security Audit CLI | ✅ `python scripts/doctor.py` | ✅ `openclaw doctor` |
+| Tool Permissions | by session type | similar |
+| Security Audit CLI | \`python scripts/doctor.py\` | \`openclaw doctor\` |
 | Multi-channel | Telegram only | 12+ channels |
-| Admin Panel | ✅ React :3000 | ✅ Control UI |
+| Admin Panel | React :3000 | Control UI |
+| **Philosophy** | Own API keys | Subscription abuse |

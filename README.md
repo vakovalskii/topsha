@@ -1,20 +1,6 @@
-# ⛧ LocalTopSH
+# 🐧 LocalTopSH
 
-### *"Per aspera ad securitatem"* 🐧
-
-**AI Agent with full system access, protected by the Pentagram.**
-
-```
-            *
-           / \
-          /   \
-         / (o) \
-        / AGENT \
-       /---------\
-      /     *     \
-     /-------------\
-    *-------*-------*
-```
+**AI Agent with full system access — your own infrastructure, your own rules.**
 
 > 🔥 **Battle-tested by 1500+ hackers!**
 > 
@@ -23,7 +9,7 @@
 > - RAM/CPU exhaustion (zip bombs, infinite loops, fork bombs)
 > - Container escape attempts
 > 
-> **Result: 0 secrets leaked, 0 downtime. The Pentagram holds.**
+> **Result: 0 secrets leaked, 0 downtime.**
 
 ---
 
@@ -39,31 +25,83 @@ Unlike projects that rely on abusing consumer subscriptions (Claude Max, ChatGPT
 | **Security** | Full control over secrets | Cookies stored who-knows-where |
 | **Ethics** | Transparent & legal | Gray area at best |
 
-### Why This Matters
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  "Free" subscription abuse:                                     │
-│                                                                 │
-│  User ──▶ Sketchy proxy ──▶ Stolen cookies ──▶ Claude.ai       │
-│              ↓                                                  │
-│         Your data goes through untrusted infrastructure         │
-│         One ToS update = everything breaks                      │
-│         Account ban = you lose access                           │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│  LocalTopSH (honest engineering):                               │
-│                                                                 │
-│  User ──▶ Your bot ──▶ Your proxy ──▶ Official API             │
-│              ↓                                                  │
-│         Full control over your infrastructure                   │
-│         API is stable, documented, supported                    │
-│         You own your data and your costs                        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
 **We believe in building real infrastructure, not hacks that break tomorrow.**
+
+---
+
+## Agent Skills
+
+What the agent can do out of the box:
+
+### 💻 System & Files
+| Skill | Description |
+|-------|-------------|
+| **Shell execution** | Run any command in isolated sandbox |
+| **File operations** | Read, write, edit, delete, search files |
+| **Directory navigation** | List, search by glob patterns |
+| **Code execution** | Python, Node.js, bash scripts |
+
+### 🌐 Web & Research
+| Skill | Description |
+|-------|-------------|
+| **Web search** | Search via Z.AI API |
+| **Page fetching** | Get any URL as clean markdown |
+| **Link extraction** | Parse and follow links |
+
+### 🧠 Memory & Context
+| Skill | Description |
+|-------|-------------|
+| **Persistent memory** | Remember facts across sessions |
+| **Task management** | Todo lists within session |
+| **Chat history** | Full conversation context |
+
+### ⏰ Automation
+| Skill | Description |
+|-------|-------------|
+| **Scheduled tasks** | Cron-like reminders |
+| **Background jobs** | Long-running processes |
+
+### 📱 Telegram Integration
+| Skill | Description |
+|-------|-------------|
+| **Send files** | Share generated files |
+| **Direct messages** | Send DMs to users |
+| **Message management** | Edit/delete bot messages |
+| **Interactive prompts** | Ask user and wait for response |
+
+---
+
+## MCP Support (Planned)
+
+> 🚧 **Coming soon** — Model Context Protocol integration
+
+LocalTopSH will support MCP for extensible tool integration:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      MCP Architecture                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌─────────┐     ┌─────────────┐     ┌─────────────────────┐  │
+│   │  Agent  │────▶│  MCP Host   │────▶│  MCP Servers        │  │
+│   └─────────┘     └─────────────┘     ├─────────────────────┤  │
+│                                       │ • filesystem        │  │
+│                                       │ • git               │  │
+│                                       │ • database          │  │
+│                                       │ • browser           │  │
+│                                       │ • custom tools...   │  │
+│                                       └─────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Planned MCP Features
+
+- [ ] MCP server discovery and connection
+- [ ] Dynamic tool registration from MCP servers
+- [ ] Resource access (files, databases)
+- [ ] Prompt templates from MCP
+- [ ] Custom MCP server development guide
 
 ---
 
@@ -126,30 +164,7 @@ Unlike projects that rely on abusing consumer subscriptions (Claude Max, ChatGPT
 | **admin** | React | 3000 | Web admin panel |
 | **sandbox_*** | python:slim | 5000-5999 | Per-user isolated containers |
 
-## Tools Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Tools API (:8100)                        │
-│                                                             │
-│  SHARED TOOLS (13) - можно вкл/выкл в админке:             │
-│  run_command, read_file, write_file, edit_file,            │
-│  delete_file, search_files, search_text, list_directory,   │
-│  search_web, fetch_page, memory, schedule_task,            │
-│  manage_tasks                                               │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         Core Agent                          │
-├─────────────────────────────────────────────────────────────┤
-│  source=bot:     13 shared + 4 bot-only = 17 tools         │
-│  source=userbot: 13 shared              = 13 tools         │
-├─────────────────────────────────────────────────────────────┤
-│  BOT-ONLY (4) - always available for telegram bot:         │
-│  send_file, send_dm, manage_message, ask_user              │
-└─────────────────────────────────────────────────────────────┘
-```
+## Tools
 
 ### Shared Tools (13)
 
@@ -178,20 +193,31 @@ Unlike projects that rely on abusing consumer subscriptions (Claude Max, ChatGPT
 | `manage_message` | Edit/delete bot messages |
 | `ask_user` | Ask question, wait answer |
 
-## Admin Panel
+## Security
 
-Web panel at `:3000` for managing the system:
+> 📖 **Full documentation:** [SECURITY.md](SECURITY.md)
 
-- **Dashboard** — stats, active users, sandboxes
-- **Services** — start/stop bot, userbot containers
-- **Config** — agent settings, rate limits
-- **Security** — 247 blocked patterns
-- **Tools** — enable/disable shared tools
-- **Users** — sessions, chat history, memory
-- **Logs** — real-time service logs
-- **Access Control** — public/admin-only/allowlist modes
+### Five Layers of Protection
 
-## Access Control (OpenClaw-style)
+| Layer | Protection | Details |
+|-------|------------|---------|
+| **Access Control** | DM Policy | admin/allowlist/pairing/public modes |
+| **Input Validation** | Blocked patterns | 247 dangerous commands blocked |
+| **Injection Defense** | Pattern matching | 19 prompt injection patterns |
+| **Sandbox Isolation** | Docker per-user | 512MB RAM, 50% CPU, 100 PIDs |
+| **Secrets Protection** | Proxy architecture | 0 secrets visible to agent |
+
+### Security Audit
+
+```bash
+# Run security doctor
+python scripts/doctor.py
+
+# Output as JSON
+python scripts/doctor.py --json
+```
+
+## Access Control
 
 Four modes managed via bot commands or admin panel:
 
@@ -211,25 +237,6 @@ Four modes managed via bot commands or admin panel:
 /revoke 123456789    # Revoke user access
 /allow 123456789     # Add to allowlist
 ```
-
-### Environment Variables
-
-```bash
-ACCESS_MODE=admin           # admin, allowlist, public, pairing
-ADMIN_USER_ID=809532582     # Your Telegram user ID
-ALLOWED_USERS=123,456,789   # Comma-separated user IDs
-```
-
-## Dynamic Sandbox
-
-Each user gets isolated Docker container:
-
-- **Image**: `python:3.11-slim`
-- **Ports**: 10 ports per user (5000-5999)
-- **Resources**: 512MB RAM, 50% CPU, 100 PIDs
-- **Workspace**: Only own `/workspace/{user_id}/`
-- **TTL**: 10 min inactivity → auto-cleanup
-- **Security**: `no-new-privileges`, no secrets access
 
 ## Quick Start
 
@@ -251,45 +258,29 @@ docker compose logs -f
 open http://localhost:3000
 ```
 
-## Security — The Pentagram 🔮
+## Admin Panel
 
-> 📖 **Full security documentation:** [SECURITY.md](SECURITY.md)
+Web panel at `:3000` for managing the system:
 
-```
-                     * THE SECURITY PENTAGRAM *
-                        
-                            [ACCESS]
-                               /\
-                              /  \
-                             / *  \
-                            / (o)  \
-                   [INPUT] /--------\ [OUTPUT]
-                            \  /\  /
-                             \/  \/
-                             /\  /\
-                            /  \/  \
-                 [SANDBOX] ---- [SECRETS]
+- **Dashboard** — stats, active users, sandboxes
+- **Services** — start/stop bot, userbot containers
+- **Config** — agent settings, rate limits
+- **Security** — blocked patterns management
+- **Tools** — enable/disable shared tools
+- **Users** — sessions, chat history, memory
+- **Logs** — real-time service logs
+- **Access Control** — public/admin-only/allowlist modes
 
-         "Per aspera ad securitatem" — 266 patterns of protection
-```
+## Dynamic Sandbox
 
-| Point | Protection | Count |
-|-------|------------|-------|
-| 🔐 ACCESS | DM Policy (admin/allowlist/pairing) | 4 modes |
-| 🛡️ INPUT | Blocked commands + Injection detection | 247 + 19 |
-| 🐳 SANDBOX | Docker isolation per user | 512MB/50%CPU |
-| 🗝️ SECRETS | Proxy architecture, 0 in agent | ∞ |
-| 🔒 OUTPUT | Secret pattern + encoding detection | auto |
+Each user gets isolated Docker container:
 
-### Security Audit
-
-```bash
-# Run security doctor (like `openclaw doctor`)
-python scripts/doctor.py
-
-# Output as JSON
-python scripts/doctor.py --json
-```
+- **Image**: `python:3.11-slim`
+- **Ports**: 10 ports per user (5000-5999)
+- **Resources**: 512MB RAM, 50% CPU, 100 PIDs
+- **Workspace**: Only own `/workspace/{user_id}/`
+- **TTL**: 10 min inactivity → auto-cleanup
+- **Security**: `no-new-privileges`, no secrets access
 
 ## Project Structure
 
@@ -309,12 +300,12 @@ LocalTopSH/
 │   └── Dockerfile
 │
 ├── scripts/              # CLI tools
-│   └── doctor.py        # Security audit (like openclaw doctor)
+│   └── doctor.py        # Security audit
 │
 ├── bot/                  # Telegram Bot (Python/aiogram)
 │   ├── main.py
 │   ├── handlers.py
-│   ├── access.py        # DM Policy (OpenClaw-style)
+│   ├── access.py        # DM Policy
 │   ├── thoughts.py      # Autonomous messages
 │   ├── security.py      # Prompt injection
 │   └── Dockerfile

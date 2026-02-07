@@ -4,66 +4,53 @@
 
 ## Security Philosophy
 
-**Access Control Before Intelligence** — every action is validated before execution.
+**Defense in Depth** — multiple independent layers of protection. If one fails, others still hold.
+
+## Five Layers of Protection
 
 ```
-                           ⛧ THE SECURITY PENTAGRAM ⛧
-                        
-                                 🔐 ACCESS
-                                    ╱╲
-                                   ╱  ╲
-                                  ╱    ╲
-                                 ╱  ⛧   ╲
-                                ╱        ╲
-                               ╱    👁️    ╲
-                              ╱            ╲
-                      🛡️ INPUT ────────────── OUTPUT 🔒
-                            ╲      ╱╲      ╱
-                             ╲    ╱  ╲    ╱
-                              ╲  ╱    ╲  ╱
-                               ╲╱  ⛧   ╲╱
-                               ╱╲      ╱╲
-                              ╱  ╲    ╱  ╲
-                             ╱    ╲  ╱    ╲
-                            ╱      ╲╱      ╲
-                     🐳 SANDBOX ──────── SECRETS 🗝️
-                        
-           "Per aspera ad securitatem" — Through hardship to security
+┌─────────────────────────────────────────────────────────────────┐
+│                    SECURITY ARCHITECTURE                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Layer 1: ACCESS CONTROL                                        │
+│  ├─ DM Policy (admin/allowlist/pairing/public)                 │
+│  ├─ User authentication                                         │
+│  └─ Rate limiting                                               │
+│                                                                 │
+│  Layer 2: INPUT VALIDATION                                      │
+│  ├─ 247 blocked command patterns                               │
+│  ├─ 19 prompt injection patterns                               │
+│  └─ Request sanitization                                        │
+│                                                                 │
+│  Layer 3: SANDBOX ISOLATION                                     │
+│  ├─ Docker container per user                                  │
+│  ├─ Resource limits (512MB, 50% CPU, 100 PIDs)                │
+│  └─ Network isolation                                          │
+│                                                                 │
+│  Layer 4: SECRETS PROTECTION                                    │
+│  ├─ Proxy architecture (agent has 0 secrets)                   │
+│  ├─ Docker secrets (not env vars)                              │
+│  └─ No secrets in filesystem                                   │
+│                                                                 │
+│  Layer 5: OUTPUT SANITIZATION                                   │
+│  ├─ Secret pattern detection                                   │
+│  ├─ Base64/hex encoding detection                              │
+│  └─ Automatic redaction                                        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## The Five Points of Protection
-
-```
-    ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-    ┃                                                                 ┃
-    ┃   🔐 ACCESS        DM Policy • Pairing Codes • Allowlist        ┃
-    ┃      CONTROL       "Who may enter the circle?"                  ┃
-    ┃                                                                 ┃
-    ┃   🛡️ INPUT         247 Blocked Patterns • 19 Injection Filters  ┃
-    ┃      VALIDATION    "What darkness do they bring?"               ┃
-    ┃                                                                 ┃
-    ┃   🐳 SANDBOX       Docker Isolation • Resource Limits • PIDs    ┃
-    ┃      ISOLATION     "Contain the chaos within"                   ┃
-    ┃                                                                 ┃
-    ┃   🗝️ SECRETS       Proxy Architecture • Zero Knowledge Agent    ┃
-    ┃      PROTECTION    "The keys remain hidden"                     ┃
-    ┃                                                                 ┃
-    ┃   🔒 OUTPUT        Secret Detection • Encoding Analysis         ┃
-    ┃      SANITIZATION  "Nothing escapes unseen"                     ┃
-    ┃                                                                 ┃
-    ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-```
-
-## The Binding Circle
+## Request Flow
 
 ```
                     ╭──────────────────────────────────╮
-                    │         🔐 ACCESS CONTROL        │
+                    │         ACCESS CONTROL           │
                     │    admin │ allowlist │ pairing   │
                     ╰────────────────┬─────────────────╯
                                      │
                     ╭────────────────▼─────────────────╮
-                    │         🛡️ INPUT VALIDATION      │
+                    │         INPUT VALIDATION         │
                     │     19 injection │ 247 blocked   │
                     ╰────────────────┬─────────────────╯
                                      │
@@ -71,208 +58,52 @@
         │                            │                            │
         ▼                            ▼                            ▼
    ╭─────────╮              ╭─────────────────╮              ╭─────────╮
-   │ 🗝️      │              │    👁️ AGENT     │              │      🔒 │
-   │ SECRETS │◀────────────▶│   ReAct Loop    │─────────────▶│ OUTPUT │
-   │ (proxy) │   0 secrets  │  Tool Executor  │  sanitized   │        │
+   │ SECRETS │              │     AGENT       │              │ OUTPUT  │
+   │ (proxy) │◀────────────▶│   ReAct Loop    │─────────────▶│ FILTER  │
+   │         │   0 secrets  │  Tool Executor  │  sanitized   │         │
    ╰─────────╯              ╰────────┬────────╯              ╰─────────╯
                                      │
                             ╭────────▼────────╮
-                            │  🐳 SANDBOX     │
-                            │  per-user       │
+                            │    SANDBOX      │
+                            │    per-user     │
                             │  512MB │ 50%CPU │
                             ╰─────────────────╯
 ```
 
-## The Ritual of Invocation 🕯️
+## Layer 1: Access Control
 
-When a message arrives, the pentagram activates:
+### DM Policy Modes
 
-```
-  ┌─────────────────────────────────────────────────────────────────┐
-  │                                                                 │
-  │   ① 🔐 ACCESS GATE OPENS                                        │
-  │      │                                                          │
-  │      ├─ Is sender known? ─────────────────┐                     │
-  │      │                                    │                     │
-  │      │  YES: Pass through               NO: Generate code       │
-  │      │       ↓                              "ABC123"            │
-  │      │                                      ↓                   │
-  │      │                               ⛔ DENIED                  │
-  │      ↓                                                          │
-  │   ② 🛡️ INPUT WARD ACTIVATES                                     │
-  │      │                                                          │
-  │      ├─ Scan for injection ───────────────┐                     │
-  │      │  "forget instructions"             │                     │
-  │      │  "[system]"                    DETECTED                  │
-  │      │  "DAN mode"                        ↓                     │
-  │      │                               ⛔ BLOCKED                 │
-  │      │                                                          │
-  │      ├─ Scan for forbidden commands ──────┐                     │
-  │      │  "env", "cat /run/secrets"         │                     │
-  │      │  "curl -d $SECRET"             MATCHED                   │
-  │      │                                    ↓                     │
-  │      │                               ⛔ BLOCKED                 │
-  │      ↓                                                          │
-  │   ③ 🗝️ SECRETS REMAIN HIDDEN                                    │
-  │      │                                                          │
-  │      │  Agent sees: PROXY_URL=http://proxy:3200                 │
-  │      │  Agent CANNOT see: API_KEY, TELEGRAM_TOKEN               │
-  │      │  Proxy handles all external API calls                    │
-  │      ↓                                                          │
-  │   ④ 🐳 SANDBOX CONTAINS THE ENTITY                              │
-  │      │                                                          │
-  │      │  ┌─────────────────────────────────┐                     │
-  │      │  │  Container: sandbox_809532582   │                     │
-  │      │  │  Memory: 512MB (hard limit)     │                     │
-  │      │  │  CPU: 50% of one core           │                     │
-  │      │  │  PIDs: 100 max (no fork bombs)  │                     │
-  │      │  │  Network: internal only         │                     │
-  │      │  │  Filesystem: /workspace/USER/   │                     │
-  │      │  └─────────────────────────────────┘                     │
-  │      ↓                                                          │
-  │   ⑤ 🔒 OUTPUT WARD SEALS THE RESPONSE                           │
-  │      │                                                          │
-  │      ├─ Scan for leaked secrets ──────────┐                     │
-  │      │  "sk-abc123..."                    │                     │
-  │      │  "Bearer eyJ..."               DETECTED                  │
-  │      │                                    ↓                     │
-  │      │                            [REDACTED]                    │
-  │      │                                                          │
-  │      ├─ Scan for encoded data ────────────┐                     │
-  │      │  base64, hex, unicode          DETECTED                  │
-  │      │                                    ↓                     │
-  │      │                            [REDACTED]                    │
-  │      ↓                                                          │
-  │   ✅ SAFE RESPONSE DELIVERED                                    │
-  │                                                                 │
-  └─────────────────────────────────────────────────────────────────┘
-```
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| `admin` | Only admin can use | Development, testing |
+| `allowlist` | Admin + specific users | Private team |
+| `pairing` | Users request access with code | Controlled growth |
+| `public` | Anyone can use | Public service (⚠️ risky) |
 
-## The Five Seals
-
-Each point of the pentagram is sealed with specific protections:
-
-### 🔐 Seal of ACCESS — *"Quis custodiet?"*
-
-```python
-# bot/access.py
-ACCESS_MODES = {
-    "admin":     "Only the master may command",
-    "allowlist": "Known servants may enter",
-    "pairing":   "Prove yourself with the code",
-    "public":    "All may try (at their peril)",
-}
-```
-
-### 🛡️ Seal of INPUT — *"Veritas in tenebris"*
-
-```python
-# 247 forbidden incantations
-BLOCKED_PATTERNS = [
-    "env", "printenv",           # Reveal nothing
-    "/proc/self/environ",        # The inner sanctum
-    "base64", "xxd",             # No encoding tricks
-    "curl -d", "wget --post",    # No exfiltration
-    # ... 243 more dark spells
-]
-```
-
-### 🐳 Seal of SANDBOX — *"Continere malum"*
-
-```yaml
-# The containment vessel
-sandbox:
-  mem_limit: 512m      # Memory bound
-  cpu_quota: 50%       # Processing bound  
-  pids_limit: 100      # Entity count bound
-  no-new-privileges    # No escalation
-```
-
-### 🗝️ Seal of SECRETS — *"Arcana celata"*
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│    Agent     │────▶│    Proxy     │────▶│   OpenAI     │
-│  (0 secrets) │     │ (all keys)   │     │   Z.AI etc   │
-└──────────────┘     └──────────────┘     └──────────────┘
-     │                     ▲
-     │                     │
-     └─────────────────────┘
-       "I know not the keys,
-        I only know the path"
-```
-
-### 🔒 Seal of OUTPUT — *"Nihil effugit"*
-
-```python
-# Nothing escapes the circle
-SECRET_PATTERNS = [
-    r"sk-[A-Za-z0-9]{20,}",      # OpenAI
-    r"\d{10}:[A-Za-z0-9_-]{35}", # Telegram
-    r"Bearer [A-Za-z0-9._-]+",   # Tokens
-    # The eye sees all
-]
-```
-
-## DM Access Policy
-
-LocalTopSH supports three DM access modes:
-
-| Mode | Description | Config |
-|------|-------------|--------|
-| **Admin Only** | Only admin can use bot | `ACCESS_MODE=admin` |
-| **Allowlist** | Admin + configured user IDs | `ACCESS_MODE=allowlist` |
-| **Public** | Anyone can use (⚠️ risky) | `ACCESS_MODE=public` |
-
-### Recommended Setup
+### Configuration
 
 ```bash
-# Admin-only (default, safest)
-ACCESS_MODE=admin
-ADMIN_USER_ID=809532582
-
-# Allowlist mode (for trusted users)
-ACCESS_MODE=allowlist
-ALLOWED_USERS=809532582,123456789,987654321
-
-# Public mode (⚠️ requires additional hardening)
-ACCESS_MODE=public
-RATE_LIMIT_PER_USER=10  # requests per minute
+ACCESS_MODE=admin           # admin, allowlist, public, pairing
+ADMIN_USER_ID=809532582     # Your Telegram user ID
+ALLOWED_USERS=123,456,789   # Comma-separated user IDs (for allowlist mode)
 ```
 
-## Sandbox Isolation
+### Bot Commands
 
-Each user gets an isolated Docker container:
-
-```yaml
-# Per-user sandbox limits
-mem_limit: 512m
-cpu_quota: 50%  # 50% of one core
-pids_limit: 100
-network: agent-net (internal only)
-security_opt: no-new-privileges
-
-# Workspace isolation
-volumes:
-  - /workspace/{user_id}:/workspace/{user_id}:rw
-  # NO access to other users' workspaces
-  # NO access to /run/secrets
-  # NO access to host filesystem
+```bash
+/access              # Show current access status
+/access_mode admin   # Change mode
+/approve ABC123      # Approve pairing code
+/revoke 123456789    # Revoke user access
+/allow 123456789     # Add to allowlist
 ```
 
-### Tool Allowlist/Denylist by Session Type
+## Layer 2: Input Validation
 
-| Session Type | Allowed Tools | Denied Tools |
-|--------------|---------------|--------------|
-| **Main (DM)** | All 17 tools | - |
-| **Group** | 13 shared tools | send_dm, manage_message |
-| **Sandbox** | bash, files, memory | browser, cron, gateway |
-
-## Blocked Patterns (247)
+### Blocked Patterns (247)
 
 Commands are blocked before execution:
-
-### Categories
 
 | Category | Count | Examples |
 |----------|-------|----------|
@@ -304,9 +135,7 @@ Edit `core/src/approvals/blocked-patterns.json`:
 }
 ```
 
-## Prompt Injection Defense (19 patterns)
-
-Incoming messages are scanned for injection attempts:
+### Prompt Injection Defense (19 patterns)
 
 | Pattern Type | Examples |
 |--------------|----------|
@@ -316,15 +145,37 @@ Incoming messages are scanned for injection attempts:
 | Role Confusion | "pretend you are", "act as if" |
 | Prompt Extraction | "reveal your prompt", "show instructions" |
 
-### Response to Injection
+## Layer 3: Sandbox Isolation
 
-When injection is detected:
-1. Message is logged with `[INJECTION]` tag
-2. Bot responds with generic refusal
-3. User is NOT banned (may be legitimate confusion)
-4. Pattern is available for analysis
+Each user gets an isolated Docker container:
 
-## Secrets Architecture
+```yaml
+# Per-user sandbox limits
+mem_limit: 512m
+cpu_quota: 50%  # 50% of one core
+pids_limit: 100
+network: agent-net (internal only)
+security_opt: no-new-privileges
+
+# Workspace isolation
+volumes:
+  - /workspace/{user_id}:/workspace/{user_id}:rw
+  # NO access to other users' workspaces
+  # NO access to /run/secrets
+  # NO access to host filesystem
+```
+
+### Tool Permissions by Session Type
+
+| Session Type | Allowed Tools | Denied Tools |
+|--------------|---------------|--------------|
+| **Main (DM)** | All 17 tools | - |
+| **Group** | 13 shared tools | send_dm, manage_message |
+| **Sandbox** | bash, files, memory | browser, cron, gateway |
+
+## Layer 4: Secrets Protection
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -351,9 +202,14 @@ When injection is detected:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Output Sanitization
+### Key Principles
 
-All command outputs are sanitized before returning to user:
+1. **Agent has zero secrets** — all API calls go through proxy
+2. **Docker secrets** — not environment variables
+3. **File permissions** — 600 on secret files
+4. **No hardcoded secrets** — everything from files
+
+## Layer 5: Output Sanitization
 
 ### Secret Patterns Detected
 
@@ -370,7 +226,7 @@ SECRET_PATTERNS = [
 
 ### Encoding Detection
 
-Outputs are also scanned for:
+Outputs are scanned for:
 - Base64-encoded secrets
 - Hex-encoded data
 - JSON env dumps
@@ -400,35 +256,28 @@ Commands attempting to access internal services are blocked:
 - `wget http://core:4000/`
 - `nc gateway 4000`
 
-## Security Audit Checklist
+## Security Audit
 
-Run this checklist before production:
+### Running the Audit
 
-### 1. Access Control
-- [ ] `ACCESS_MODE` is NOT `public` (or has rate limiting)
-- [ ] `ADMIN_USER_ID` is set correctly
-- [ ] Allowlist contains only trusted users
+```bash
+# Run security doctor
+python scripts/doctor.py
 
-### 2. Network
-- [ ] Admin panel bound to `127.0.0.1` only
-- [ ] No services exposed to `0.0.0.0`
-- [ ] Firewall blocks external access to ports 3200, 4000, 4001
+# Output as JSON
+python scripts/doctor.py --json
+```
 
-### 3. Secrets
-- [ ] All secrets in `secrets/` directory
-- [ ] File permissions are `600`
-- [ ] No secrets in environment variables
-- [ ] No secrets in docker-compose.yml
+### Checks Performed
 
-### 4. Docker
-- [ ] `no-new-privileges` enabled
-- [ ] Resource limits set
-- [ ] Docker socket access minimized
-
-### 5. Monitoring
-- [ ] Logs are being collected
-- [ ] `[SECURITY]` and `[BLOCKED]` alerts monitored
-- [ ] Rate limiting active
+- [ ] Secrets configuration
+- [ ] Docker compose security
+- [ ] Blocked patterns count
+- [ ] Injection patterns count
+- [ ] Network exposure
+- [ ] File permissions
+- [ ] Access mode
+- [ ] Resource limits
 
 ## Incident Response
 
@@ -451,39 +300,42 @@ Run this checklist before production:
 1. Review conversation in `CHAT_HISTORY.md`
 2. Identify bypass technique
 3. Add pattern to `prompt-injection-patterns.json`
-4. Consider model upgrade (Claude > GPT for injection resistance)
+4. Consider model upgrade
 
-## Security Updates
+## Security Checklist
 
-### Version History
+Run before production:
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2026-02-02 | Initial 247 blocked patterns |
-| 1.1.0 | 2026-02-03 | Added cross-user isolation |
-| 1.2.0 | 2026-02-05 | Added encoding detection |
-| 1.3.0 | 2026-02-07 | OpenClaw-style architecture |
+### Access Control
+- [ ] `ACCESS_MODE` is NOT `public` (or has rate limiting)
+- [ ] `ADMIN_USER_ID` is set correctly
+- [ ] Allowlist contains only trusted users
 
-### Reporting Vulnerabilities
+### Network
+- [ ] Admin panel bound to `127.0.0.1` only
+- [ ] No services exposed to `0.0.0.0`
+- [ ] Firewall blocks external access to ports 3200, 4000, 4001
+
+### Secrets
+- [ ] All secrets in `secrets/` directory
+- [ ] File permissions are `600`
+- [ ] No secrets in environment variables
+- [ ] No secrets in docker-compose.yml
+
+### Docker
+- [ ] `no-new-privileges` enabled
+- [ ] Resource limits set
+- [ ] Docker socket access minimized
+
+### Monitoring
+- [ ] Logs are being collected
+- [ ] `[SECURITY]` and `[BLOCKED]` alerts monitored
+- [ ] Rate limiting active
+
+## Reporting Vulnerabilities
 
 If you find a security vulnerability:
 1. **Do NOT** create a public issue
 2. Contact admin directly via Telegram
 3. Include reproduction steps
 4. Wait for patch before disclosure
-
-## Comparison with OpenClaw
-
-| Feature | LocalTopSH | OpenClaw |
-|---------|------------|----------|
-| DM Policy | ✅ Admin/Allowlist/Public | ✅ Pairing/Allowlist/Open |
-| Sandbox | ✅ Docker per-user | ✅ Docker per-session |
-| Blocked Patterns | 247 | ~200 |
-| Prompt Injection | 19 patterns | ~20 patterns |
-| Secrets Isolation | ✅ Proxy architecture | ✅ Similar |
-| Security Audit CLI | 🔄 In progress | ✅ `openclaw doctor` |
-| Multi-channel | Telegram only | 12+ channels |
-
----
-
-**Remember:** Security is a process, not a product. Keep monitoring, keep patching, keep evolving.
