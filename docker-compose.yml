@@ -138,6 +138,8 @@ services:
       - BOT_URL=http://bot:4001
       - USERBOT_URL=http://userbot:8080
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ADMIN_USER_ID=${ADMIN_USER_ID:-809532582}
+      - ACCESS_MODE=${ACCESS_MODE:-public}
     secrets:
       - model_name
       - gdrive_client_id
