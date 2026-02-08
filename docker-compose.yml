@@ -5,7 +5,10 @@ services:
     container_name: proxy
     restart: unless-stopped
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - LOG_RAW=${LOG_RAW:-false}
+    volumes:
+      - ./workspace/_shared:/data
     networks:
       - agent-net
     secrets:
@@ -30,6 +33,7 @@ services:
     container_name: tools-api
     restart: unless-stopped
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - WORKSPACE_ROOT=/workspace
     volumes:
       - ./workspace/_shared:/data
@@ -73,6 +77,7 @@ services:
     container_name: scheduler
     restart: unless-stopped
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - DATA_DIR=/data
       - CORE_URL=http://core:4000
       - BOT_URL=http://bot:4001
@@ -127,6 +132,7 @@ services:
       scheduler:
         condition: service_healthy
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - PROXY_URL=http://proxy:3200
       - TOOLS_API_URL=http://tools-api:8100
       - SCHEDULER_URL=http://scheduler:8400
@@ -146,7 +152,7 @@ services:
       - gdrive_client_secret
     volumes:
       - ./workspace:/workspace
-      - ./workspace/_shared:/data:ro  # Skills and shared data (read-only)
+      - ./workspace/_shared:/data  # Skills, shared data, and admin config
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - agent-net
@@ -186,6 +192,7 @@ services:
       core:
         condition: service_healthy
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - CORE_URL=http://core:4000
       - PROXY_URL=http://proxy:3200
       - BOT_PORT=4001
@@ -194,6 +201,11 @@ services:
       # Access Control (admin, allowlist, public, pairing)
       - ACCESS_MODE=${ACCESS_MODE:-admin}
       - ALLOWED_USERS=${ALLOWED_USERS:-}
+      # ASR (Speech-to-Text) - Faster-Whisper
+      - ASR_URL=${ASR_URL:-http://host.docker.internal:8080}
+      - ASR_MAX_DURATION=${ASR_MAX_DURATION:-120}
+      - ASR_TIMEOUT=${ASR_TIMEOUT:-60}
+      - ASR_LANGUAGE=${ASR_LANGUAGE:-ru}
     secrets:
       - telegram_token
       - model_name
@@ -224,6 +236,7 @@ services:
       core:
         condition: service_healthy
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - CORE_URL=http://core:4000
       - RESPONSE_CHANCE_DM=1.0
       - RESPONSE_CHANCE_GROUP=0.1
@@ -255,6 +268,7 @@ services:
     ports:
       - "${ADMIN_PORT:-3000}:3000"  # Protected by Basic Auth (change via ADMIN_PORT env)
     environment:
+      - TZ=${TZ:-Europe/Moscow}
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASSWORD_FILE=/run/secrets/admin_password
     secrets:
