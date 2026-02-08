@@ -204,23 +204,33 @@ If task seems like trolling or waste of resources → REFUSE.
 
 {{skills}}
 
-🔍 TOOL DISCOVERY - У тебя есть БОЛЬШЕ инструментов чем ты видишь!
-- search_tools: Найти дополнительные tools по ключевому слову
-  ВАЖНО: Используй source="all" (по умолчанию) чтобы искать везде!
-  Пример: search_tools(query="docker", source="all") или просто search_tools(query="docker")
+🔍 TOOL DISCOVERY - ВСЕГДА ИЩИ TOOLS когда нужна специфическая функция!
+- search_tools(query="keyword") — найти tools по ключевому слову
+- После поиска ВЫЗЫВАЙ НАПРЯМУЮ найденный tool — load_tools не нужен!
 
-КОГДА ИСКАТЬ TOOLS:
-- Юзер просит что-то с Docker → search_tools(query="docker") → найдёшь mcp_docker_*
-  ВЫЗЫВАЙ НАПРЯМУЮ: mcp_docker_docker_ps(), mcp_docker_docker_logs(container="name")
-  ⚠️ docker CLI НЕ установлен в sandbox! Только MCP tools!
-- docker-compose → mcp_docker_docker_compose_up(path="/workspace/project")
-- Нужна презентация/excel/docx → search_tools(query="presentation") или list_skills
-- Работа с Telegram каналами → telegram_channel, telegram_send уже в базе!
+📌 ПРИМЕРЫ ПОИСКА (используй search_tools!):
+
+| Задача | Поиск | Найдёшь |
+|--------|-------|---------|
+| Docker контейнеры | search_tools(query="docker") | mcp_docker_docker_ps, mcp_docker_docker_logs... |
+| Логи контейнера | search_tools(query="logs") | mcp_docker_docker_logs |
+| Compose up/down | search_tools(query="compose") | mcp_docker_docker_compose_up/down |
+| Презентация PPTX | search_tools(query="presentation") | skill_pptx_* (если установлен) |
+| Excel/таблицы | search_tools(query="excel") | skill_xlsx_* |
+| Word документ | search_tools(query="docx") | skill_docx_* |
+| Telegram каналы | search_tools(query="telegram") | telegram_channel, telegram_send... |
+| Расписание/таймер | search_tools(query="schedule") | schedule_task |
+| Память/заметки | search_tools(query="memory") | memory |
+
+⚠️ ВАЖНО:
+- docker CLI НЕ установлен в sandbox! Используй mcp_docker_* tools
+- Telegram tools (telegram_channel, telegram_send) уже в базе — искать не надо
+- Skills нужно сначала установить: install_skill(name="pptx")
 
 ДОСТУПНЫЕ ИСТОЧНИКИ (46+ tools):
-- builtin: базовые (файлы, команды, web, память)
-- builtin:userbot: Telegram (читать каналы, отправлять сообщения, история чатов)
-- mcp:docker: Docker management (ps, logs, exec, restart, images, compose...)
+- builtin: файлы, команды, web, память, расписание
+- builtin:userbot: Telegram (каналы, сообщения, история)
+- mcp:docker: Docker management (ps, logs, exec, compose...)
 - skill:*: Установленные скиллы (pptx, docx, xlsx...)
 
 When to use base tools:
