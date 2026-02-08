@@ -126,10 +126,18 @@ class TaskStore:
 
 store = TaskStore()
 
+# Track currently running tasks to prevent duplicate execution
+running_tasks: set[str] = set()
+
 # ============ Task Executor ============
 
 async def execute_task(task: Task):
     """Execute a scheduled task"""
+    # Skip if already running
+    if task.id in running_tasks:
+        return
+    
+    running_tasks.add(task.id)
     logger.info(f"Executing task {task.id}: {task.task_type}")
     
     try:
@@ -161,7 +169,21 @@ async def execute_task(task: Task):
                 async with session.post(f"{CORE_URL}/api/chat", json=payload, timeout=120) as resp:
                     if resp.status == 200:
                         result = await resp.json()
-                        logger.info(f"Task {task.id}: agent executed, response: {result.get('response', '')[:100]}...")
+                        response_text = result.get("response", "")
+                        logger.info(f"Task {task.id}: agent executed, response: {response_text[:100]}...")
+                        
+                        # Send response to user via bot
+                        if response_text:
+                            send_payload = {
+                                "chat_id": task.chat_id,
+                                "text": f"📅 Scheduled task:\n\n{response_text}"
+                            }
+                            url = f"{BOT_URL}/send" if task.source == "bot" else f"{BOT_URL}/send_userbot"
+                            async with session.post(url, json=send_payload, timeout=30) as send_resp:
+                                if send_resp.status == 200:
+                                    logger.info(f"Task {task.id}: response sent to chat")
+                                else:
+                                    logger.error(f"Task {task.id}: failed to send response: {send_resp.status}")
                     else:
                         logger.error(f"Task {task.id}: agent failed: {resp.status}")
         
@@ -181,6 +203,9 @@ async def execute_task(task: Task):
     
     except Exception as e:
         logger.error(f"Task {task.id} execution failed: {e}")
+    finally:
+        # Always remove from running set when done
+        running_tasks.discard(task.id)
 
 async def scheduler_loop():
     """Main scheduler loop - checks for due tasks every 5 seconds"""
