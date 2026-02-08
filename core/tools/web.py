@@ -25,7 +25,7 @@ async def tool_search_web(args: dict, ctx: ToolContext) -> ToolResult:
     try:
         async with aiohttp.ClientSession() as session:
             url = f"{CONFIG.proxy_url}/zai/search?q={query}"
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
                 if resp.status != 200:
                     return ToolResult(False, error=f"Search failed: {resp.status}")
                 data = await resp.json()
