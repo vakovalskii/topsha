@@ -999,3 +999,82 @@ async def run_task_now(task_id: str):
                     raise HTTPException(resp.status, "Failed to run task")
     except aiohttp.ClientError as e:
         raise HTTPException(503, f"Scheduler unavailable: {e}")
+
+
+# ============ SYSTEM PROMPT ============
+
+SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(__file__), "src", "agent", "system.txt")
+
+
+class SystemPromptUpdate(BaseModel):
+    content: str
+
+
+@router.get("/prompt")
+async def get_system_prompt():
+    """Get current system prompt"""
+    try:
+        if os.path.exists(SYSTEM_PROMPT_PATH):
+            with open(SYSTEM_PROMPT_PATH, "r") as f:
+                content = f.read()
+            return {
+                "content": content,
+                "path": SYSTEM_PROMPT_PATH,
+                "length": len(content),
+                "lines": content.count("\n") + 1
+            }
+        else:
+            return {"content": "", "error": "System prompt file not found"}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to read prompt: {e}")
+
+
+@router.put("/prompt")
+async def update_system_prompt(data: SystemPromptUpdate):
+    """Update system prompt"""
+    try:
+        # Backup old prompt
+        backup_path = SYSTEM_PROMPT_PATH + ".backup"
+        if os.path.exists(SYSTEM_PROMPT_PATH):
+            with open(SYSTEM_PROMPT_PATH, "r") as f:
+                old_content = f.read()
+            with open(backup_path, "w") as f:
+                f.write(old_content)
+        
+        # Write new prompt
+        with open(SYSTEM_PROMPT_PATH, "w") as f:
+            f.write(data.content)
+        
+        return {
+            "success": True,
+            "length": len(data.content),
+            "lines": data.content.count("\n") + 1,
+            "backup": backup_path
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Failed to update prompt: {e}")
+
+
+@router.post("/prompt/restore")
+async def restore_system_prompt():
+    """Restore system prompt from backup"""
+    backup_path = SYSTEM_PROMPT_PATH + ".backup"
+    try:
+        if not os.path.exists(backup_path):
+            raise HTTPException(404, "No backup found")
+        
+        with open(backup_path, "r") as f:
+            content = f.read()
+        
+        with open(SYSTEM_PROMPT_PATH, "w") as f:
+            f.write(content)
+        
+        return {
+            "success": True,
+            "restored": True,
+            "length": len(content)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to restore: {e}")

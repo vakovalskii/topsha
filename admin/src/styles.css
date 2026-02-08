@@ -941,3 +941,90 @@ code {
 .sidebar-header h1:hover::before {
   animation: waddle 0.5s ease-in-out infinite;
 }
+
+/* ============ PROMPT EDITOR ============ */
+
+.prompt-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+}
+
+.prompt-editor textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 500px;
+  padding: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.prompt-editor textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prompt-editor textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.prompt-stats {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 4px 12px;
+  background: var(--bg-input);
+  border-radius: 4px;
+}
+
+.prompt-help {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.prompt-help h4 {
+  color: var(--text);
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.prompt-help ul {
+  list-style: none;
+  margin-bottom: 12px;
+}
+
+.prompt-help li {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.prompt-help li code {
+  background: var(--bg-input);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.prompt-help p {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.prompt-help p code {
+  background: var(--bg-input);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--orange);
+}
