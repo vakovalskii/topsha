@@ -20,6 +20,66 @@ _tools_cache_time = 0
 TOOLS_CACHE_TTL = 60  # seconds
 
 
+def try_fix_json_args(raw_args: str, tool_name: str) -> Optional[dict]:
+    """Try to fix malformed JSON from models like DeepSeek
+    
+    Common issues:
+    - Trailing commas: {"a": 1,}
+    - Single quotes: {'a': 1}
+    - Unquoted keys: {a: 1}
+    - Missing closing brace
+    - Newlines in strings
+    """
+    if not raw_args or not raw_args.strip():
+        return {}
+    
+    original = raw_args
+    
+    # Try basic fixes
+    try:
+        # Fix trailing commas before } or ]
+        fixed = re.sub(r',\s*([}\]])', r'\1', raw_args)
+        
+        # Fix single quotes to double quotes (careful with nested)
+        if "'" in fixed and '"' not in fixed:
+            fixed = fixed.replace("'", '"')
+        
+        # Try parsing
+        return json.loads(fixed)
+    except:
+        pass
+    
+    # Try extracting JSON from markdown code block
+    try:
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_args)
+        if match:
+            return json.loads(match.group(1))
+    except:
+        pass
+    
+    # Try finding first { to last }
+    try:
+        start = raw_args.find('{')
+        end = raw_args.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            subset = raw_args[start:end+1]
+            return json.loads(subset)
+    except:
+        pass
+    
+    # For simple tools, try to extract key-value pairs
+    try:
+        # Pattern: key: value or "key": value
+        pairs = re.findall(r'["\']?(\w+)["\']?\s*:\s*["\']([^"\']+)["\']', raw_args)
+        if pairs:
+            return dict(pairs)
+    except:
+        pass
+    
+    agent_logger.warning(f"Could not fix JSON for {tool_name}: {original[:200]}")
+    return None
+
+
 @dataclass
 class Session:
     """User session"""
@@ -67,8 +127,8 @@ class SessionManager:
 sessions = SessionManager()
 
 
-def load_system_prompt() -> str:
-    """Load system prompt from file"""
+def load_system_prompt_template() -> str:
+    """Load system prompt template from file"""
     prompt_file = Path(__file__).parent / "src" / "agent" / "system.txt"
     if prompt_file.exists():
         return prompt_file.read_text()
@@ -84,6 +144,26 @@ You can:
 
 Always be helpful and concise. Think step by step when solving complex problems.
 """
+
+
+def format_system_prompt(
+    template: str,
+    cwd: str,
+    tools_list: str,
+    user_ports: str,
+    skills_list: str = ""
+) -> str:
+    """Replace placeholders in system prompt template"""
+    from datetime import datetime
+    
+    prompt = template
+    prompt = prompt.replace("{{cwd}}", cwd)
+    prompt = prompt.replace("{{date}}", datetime.now().strftime("%Y-%m-%d %H:%M"))
+    prompt = prompt.replace("{{tools}}", tools_list)
+    prompt = prompt.replace("{{userPorts}}", user_ports)
+    prompt = prompt.replace("{{skills}}", skills_list)
+    
+    return prompt
 
 
 async def load_skill_mentions(user_id: str = None) -> str:
@@ -162,18 +242,58 @@ def save_session_to_file(session: Session):
         agent_logger.error(f"Failed to save session: {e}")
 
 
+def is_mlx_model() -> bool:
+    """Check if using MLX backend (doesn't support tool calling)"""
+    model = CONFIG.model.lower() if CONFIG.model else ""
+    # MLX models typically have mlx in name or are local models
+    return "mlx" in model or model.startswith("local/")
+
+
+def estimate_context_size(messages: list) -> int:
+    """Estimate context size in characters"""
+    return sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
+
+
 async def call_llm(messages: list, tools: list) -> dict:
     """Call LLM via proxy"""
     if not CONFIG.proxy_url:
         return {"error": "No proxy configured"}
     
+    # Check context size - MLX struggles with very large contexts
+    context_size = estimate_context_size(messages)
+    max_context = int(os.getenv("MAX_CONTEXT_CHARS", "40000"))
+    
+    if context_size > max_context:
+        agent_logger.warning(f"Context too large ({context_size} chars > {max_context}), trimming...")
+        # Keep system message and trim history
+        system_msg = messages[0] if messages and messages[0].get("role") == "system" else None
+        user_msg = messages[-1] if messages and messages[-1].get("role") == "user" else None
+        
+        if system_msg and user_msg:
+            # Keep only system + last few messages + user
+            middle = messages[1:-1]
+            while estimate_context_size([system_msg] + middle + [user_msg]) > max_context and len(middle) > 2:
+                middle.pop(0)
+            messages = [system_msg] + middle + [user_msg]
+            agent_logger.info(f"Trimmed context to {estimate_context_size(messages)} chars")
+    
+    # MLX doesn't support tool calling - use prompt-based approach
+    use_tools = not is_mlx_model() and tools
+    
     request_body = {
         "model": CONFIG.model,
         "messages": messages,
-        "tools": tools,
-        "tool_choice": "auto",
         "max_tokens": 8000,
     }
+    
+    if use_tools:
+        request_body["tools"] = tools
+        request_body["tool_choice"] = "auto"
+    else:
+        # For MLX: inject tool descriptions into system prompt
+        if tools and is_mlx_model():
+            agent_logger.info("MLX mode: tool calling disabled, using prompt-based approach")
+            # Note: MLX users should use simpler tasks or switch to OpenAI-compatible API
     
     # Log raw request (truncate long content)
     agent_logger.debug("=" * 60)
@@ -395,16 +515,38 @@ async def run_agent(
     agent_logger.info(f"Agent run: user={user_id}, chat={chat_id}, source={source}")
     agent_logger.info(f"Message: {message[:100]}...")
     
-    # Build system message
-    system_prompt = load_system_prompt()
+    # Get tool definitions FIRST (needed for system prompt)
+    use_lazy_loading = os.getenv("LAZY_TOOL_LOADING", "true").lower() == "true"
+    tool_definitions = await get_tool_definitions(source, lazy_loading=use_lazy_loading)
+    tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source)
     
-    # Add skill mentions (name + description only, agent loads full instructions on-demand)
+    # Format tools list for prompt
+    tools_list = "\n".join([
+        f"- {t['function']['name']}: {t['function'].get('description', '')[:100]}"
+        for t in tool_definitions
+    ])
+    
+    # Load skill mentions
     skill_mentions = await load_skill_mentions(str(user_id))
     
+    # Get user ports
+    user_ports = f"{4010 + (user_id % 1000)}-{4010 + (user_id % 1000) + 9}"
+    
+    # Build system prompt with placeholders replaced
+    system_template = load_system_prompt_template()
+    system_prompt = format_system_prompt(
+        template=system_template,
+        cwd=session.cwd,
+        tools_list=tools_list,
+        user_ports=user_ports,
+        skills_list=skill_mentions
+    )
+    
+    # Add workspace info
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     workspace_info = f"\nUser: @{username} (id={user_id})\nWorkspace: {session.cwd}\nTime: {timestamp}\nSource: {source}"
     
-    messages = [{"role": "system", "content": system_prompt + skill_mentions + workspace_info}]
+    messages = [{"role": "system", "content": system_prompt + workspace_info}]
     messages.extend(session.history)
     messages.append({"role": "user", "content": message})
     
@@ -422,15 +564,6 @@ async def run_agent(
     
     final_response = ""
     iteration = 0
-    
-    # Get tool definitions from API (filtered by source)
-    # Use lazy loading by default - agent gets base tools + search_tools
-    # Agent can discover and load more tools dynamically
-    use_lazy_loading = os.getenv("LAZY_TOOL_LOADING", "true").lower() == "true"
-    tool_definitions = await get_tool_definitions(source, lazy_loading=use_lazy_loading)
-    
-    # Filter tools based on session type permissions
-    tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source)
     
     # Track dynamically loaded tools for this session
     dynamic_tools = []
@@ -495,9 +628,13 @@ async def run_agent(
                 
                 try:
                     args = json.loads(raw_args)
-                except Exception as e:
-                    agent_logger.error(f"[iter {iteration}] TOOL ARGS PARSE ERROR: {e}")
-                    args = {}
+                except json.JSONDecodeError as e:
+                    agent_logger.warning(f"[iter {iteration}] TOOL ARGS PARSE ERROR: {e}")
+                    # Try to fix common JSON issues from DeepSeek/other models
+                    args = try_fix_json_args(raw_args, name)
+                    if args is None:
+                        agent_logger.error(f"[iter {iteration}] Could not fix JSON args for {name}")
+                        args = {}
                 
                 # Execute tool
                 tool_result = await execute_tool(name, args, tool_ctx)

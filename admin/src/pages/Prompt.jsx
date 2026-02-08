@@ -107,12 +107,13 @@ export default function Prompt() {
       <div className="prompt-help">
         <h4>Available placeholders:</h4>
         <ul>
-          <li><code>{"{{tools}}"}</code> - List of available tools</li>
+          <li><code>{"{{tools}}"}</code> - List of available tools (name + description)</li>
+          <li><code>{"{{skills}}"}</code> - Installed skills with descriptions</li>
           <li><code>{"{{cwd}}"}</code> - User's working directory</li>
           <li><code>{"{{date}}"}</code> - Current date/time</li>
           <li><code>{"{{userPorts}}"}</code> - Assigned ports for user's servers</li>
         </ul>
-        <p>💡 After saving, restart the <code>core</code> service to apply changes.</p>
+        <p>💡 Changes apply immediately - no restart needed!</p>
       </div>
     </div>
   )

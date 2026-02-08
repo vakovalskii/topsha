@@ -32,7 +32,7 @@ class Config:
     max_history: int = 10
     max_tool_output: int = 8000
     max_context_messages: int = 40
-    max_blocked_commands: int = 3
+    max_blocked_commands: int = 10
     
     # Timeouts (seconds)
     tool_timeout: int = 120
