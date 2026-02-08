@@ -1,4 +1,5 @@
-import { Routes, Route, NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Services from './pages/Services'
 import Config from './pages/Config'
@@ -12,9 +13,46 @@ import Tasks from './pages/Tasks'
 import Prompt from './pages/Prompt'
 
 function App() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const location = useLocation()
+  
+  // Close menu on route change
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location])
+  
+  // Close menu on escape
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [])
+
   return (
     <div className="app">
-      <aside className="sidebar">
+      {/* Mobile header */}
+      <header className="mobile-header">
+        <h1>Topsha</h1>
+        <button 
+          className={`hamburger ${menuOpen ? 'active' : ''}`}
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label="Toggle menu"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </header>
+      
+      {/* Overlay for mobile */}
+      <div 
+        className={`sidebar-overlay ${menuOpen ? 'visible' : ''}`}
+        onClick={() => setMenuOpen(false)}
+      />
+      
+      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h1>Topsha</h1>
         </div>

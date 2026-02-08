@@ -1,30 +1,48 @@
 import { useState, useEffect } from 'react'
-import { getStats, getHealth, getServices } from '../api'
+import { getStats, getHealth, getServices, fetchApi } from '../api'
 
 function Dashboard() {
   const [stats, setStats] = useState(null)
   const [services, setServices] = useState([])
+  const [systemMetrics, setSystemMetrics] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 10000)
+    const interval = setInterval(loadData, 5000) // More frequent for metrics
     return () => clearInterval(interval)
   }, [])
 
   async function loadData() {
     try {
-      const [statsData, servicesData] = await Promise.all([
+      const [statsData, servicesData, metricsData] = await Promise.all([
         getStats().catch(() => ({})),
-        getServices().catch(() => [])
+        getServices().catch(() => []),
+        fetchApi('/system/metrics').catch(() => null)
       ])
       setStats(statsData)
       setServices(servicesData)
+      setSystemMetrics(metricsData)
     } catch (e) {
       console.error('Failed to load dashboard:', e)
     } finally {
       setLoading(false)
     }
+  }
+  
+  // Format bytes to human readable
+  function formatBytes(bytes, decimals = 1) {
+    if (!bytes) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i]
+  }
+  
+  // Format network speed
+  function formatSpeed(bytesPerSec) {
+    if (!bytesPerSec) return '0 B/s'
+    return formatBytes(bytesPerSec) + '/s'
   }
 
   if (loading) {
@@ -38,7 +56,82 @@ function Dashboard() {
         <p className="page-subtitle">System overview and status</p>
       </div>
 
-      {/* Stats */}
+      {/* System Metrics */}
+      {systemMetrics && (
+        <div className="grid grid-4" style={{ marginBottom: '8px' }}>
+          <div className="card stat">
+            <div className="stat-value" style={{ 
+              color: systemMetrics.cpu_percent > 80 ? 'var(--danger)' : 
+                     systemMetrics.cpu_percent > 50 ? 'var(--warning)' : 'var(--success)'
+            }}>
+              {systemMetrics.cpu_percent?.toFixed(1) || 0}%
+            </div>
+            <div className="stat-label">💻 CPU</div>
+            <div style={{ marginTop: '8px', height: '4px', background: 'var(--bg-input)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ 
+                width: `${systemMetrics.cpu_percent || 0}%`, 
+                height: '100%', 
+                background: systemMetrics.cpu_percent > 80 ? 'var(--danger)' : 
+                           systemMetrics.cpu_percent > 50 ? 'var(--warning)' : 'var(--success)',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+          <div className="card stat">
+            <div className="stat-value" style={{ 
+              color: systemMetrics.memory_percent > 80 ? 'var(--danger)' : 
+                     systemMetrics.memory_percent > 50 ? 'var(--warning)' : 'var(--success)'
+            }}>
+              {systemMetrics.memory_percent?.toFixed(1) || 0}%
+            </div>
+            <div className="stat-label">🧠 Memory</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+              {formatBytes(systemMetrics.memory_used)} / {formatBytes(systemMetrics.memory_total)}
+            </div>
+            <div style={{ marginTop: '4px', height: '4px', background: 'var(--bg-input)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ 
+                width: `${systemMetrics.memory_percent || 0}%`, 
+                height: '100%', 
+                background: systemMetrics.memory_percent > 80 ? 'var(--danger)' : 
+                           systemMetrics.memory_percent > 50 ? 'var(--warning)' : 'var(--success)',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+          <div className="card stat">
+            <div className="stat-value" style={{ 
+              color: systemMetrics.disk_percent > 90 ? 'var(--danger)' : 
+                     systemMetrics.disk_percent > 70 ? 'var(--warning)' : 'var(--success)'
+            }}>
+              {systemMetrics.disk_percent?.toFixed(1) || 0}%
+            </div>
+            <div className="stat-label">💾 Disk</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+              {formatBytes(systemMetrics.disk_used)} / {formatBytes(systemMetrics.disk_total)}
+            </div>
+            <div style={{ marginTop: '4px', height: '4px', background: 'var(--bg-input)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ 
+                width: `${systemMetrics.disk_percent || 0}%`, 
+                height: '100%', 
+                background: systemMetrics.disk_percent > 90 ? 'var(--danger)' : 
+                           systemMetrics.disk_percent > 70 ? 'var(--warning)' : 'var(--success)',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+          <div className="card stat">
+            <div className="stat-value" style={{ fontSize: '24px', color: 'var(--accent)' }}>
+              ↓{formatSpeed(systemMetrics.network_recv_rate)}
+            </div>
+            <div className="stat-label">🌐 Network</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+              ↑{formatSpeed(systemMetrics.network_sent_rate)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Agent Stats */}
       <div className="grid grid-4">
         <div className="card stat">
           <div className="stat-value">{stats?.active_users || 0}</div>

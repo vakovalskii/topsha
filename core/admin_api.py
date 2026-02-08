@@ -4,11 +4,15 @@ import os
 import json
 import subprocess
 import asyncio
+import time
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import docker
+
+# For system metrics
+import psutil
 
 
 def _read_model_name() -> str:
@@ -65,6 +69,66 @@ class PatternRequest(BaseModel):
 
 class ToolToggle(BaseModel):
     enabled: bool
+
+
+# ============ SYSTEM METRICS ============
+
+# Store previous network stats for rate calculation
+_prev_net_io = None
+_prev_net_time = None
+
+
+@router.get("/system/metrics")
+async def get_system_metrics():
+    """Get host system metrics (CPU, Memory, Disk, Network)"""
+    global _prev_net_io, _prev_net_time
+    
+    try:
+        # CPU
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        
+        # Memory
+        mem = psutil.virtual_memory()
+        
+        # Disk - root partition
+        disk = psutil.disk_usage('/')
+        
+        # Network - calculate rate
+        net_io = psutil.net_io_counters()
+        current_time = time.time()
+        
+        recv_rate = 0
+        sent_rate = 0
+        
+        if _prev_net_io and _prev_net_time:
+            time_delta = current_time - _prev_net_time
+            if time_delta > 0:
+                recv_rate = (net_io.bytes_recv - _prev_net_io.bytes_recv) / time_delta
+                sent_rate = (net_io.bytes_sent - _prev_net_io.bytes_sent) / time_delta
+        
+        _prev_net_io = net_io
+        _prev_net_time = current_time
+        
+        return {
+            "cpu_percent": cpu_percent,
+            "cpu_count": psutil.cpu_count(),
+            "memory_total": mem.total,
+            "memory_used": mem.used,
+            "memory_available": mem.available,
+            "memory_percent": mem.percent,
+            "disk_total": disk.total,
+            "disk_used": disk.used,
+            "disk_free": disk.free,
+            "disk_percent": disk.percent,
+            "network_bytes_recv": net_io.bytes_recv,
+            "network_bytes_sent": net_io.bytes_sent,
+            "network_recv_rate": recv_rate,
+            "network_sent_rate": sent_rate,
+            "uptime": time.time() - psutil.boot_time(),
+            "load_avg": list(os.getloadavg()) if hasattr(os, 'getloadavg') else [0, 0, 0]
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get system metrics: {e}")
 
 
 # ============ STATS ============
