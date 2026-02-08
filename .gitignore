@@ -36,3 +36,4 @@ workspace/
 secrets/
 .cursor/
 userbot/session/*.session
+# commit-notify
