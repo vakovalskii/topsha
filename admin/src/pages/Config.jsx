@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { getConfig, updateConfig, getServices, stopService, startService, getAccess, setAccessMode, setAdminId, getAllowlist, updateAllowlist } from '../api'
+import { getConfig, updateConfig, getServices, stopService, startService, getAccess, setAccessMode, setAdminId, getAllowlist, updateAllowlist, getSearchConfig, updateSearchConfig, getASRConfig, updateASRConfig, getASRHealth, getTimezone, updateTimezone, getLocale, updateLocale } from '../api'
+import { useT } from '../i18n'
 
 function Config() {
+  const { t } = useT()
   const [config, setConfig] = useState({})
   const [services, setServices] = useState({})
   const [access, setAccess] = useState(null)
@@ -15,12 +17,131 @@ function Config() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [activeTab, setActiveTab] = useState('access')
+  const [searchConfig, setSearchConfig] = useState(null)
+  const [searchSaving, setSearchSaving] = useState(false)
+  const [asrConfig, setAsrConfig] = useState(null)
+  const [asrSaving, setAsrSaving] = useState(false)
+  const [asrHealth, setAsrHealth] = useState(null)
+  const [tzData, setTzData] = useState(null)
+  const [tzSaving, setTzSaving] = useState(false)
+  const [selectedTz, setSelectedTz] = useState('')
+  const [localeData, setLocaleData] = useState(null)
+  const [selectedLang, setSelectedLang] = useState('')
+  const [localeSaving, setLocaleSaving] = useState(false)
 
   useEffect(() => {
     loadConfig()
     loadServices()
     loadAccessSettings()
+    loadSearchConfig()
+    loadASRConfig()
+    loadTimezone()
+    loadLocale()
   }, [])
+
+  async function loadSearchConfig() {
+    try {
+      const data = await getSearchConfig()
+      setSearchConfig(data)
+    } catch (e) {
+      console.error('Failed to load search config:', e)
+    }
+  }
+
+  async function loadASRConfig() {
+    try {
+      const data = await getASRConfig()
+      setAsrConfig(data)
+      // Also check health
+      try {
+        const health = await getASRHealth()
+        setAsrHealth(health)
+      } catch (e) {
+        setAsrHealth({ status: 'error', error: e.message })
+      }
+    } catch (e) {
+      console.error('Failed to load ASR config:', e)
+    }
+  }
+
+  async function handleASRSave() {
+    setAsrSaving(true)
+    try {
+      await updateASRConfig(asrConfig)
+      setToast({ type: 'success', message: t('toast.asr_saved') })
+      // Re-check health
+      try {
+        const health = await getASRHealth()
+        setAsrHealth(health)
+      } catch (e) {}
+    } catch (e) {
+      setToast({ type: 'error', message: e.message })
+    } finally {
+      setAsrSaving(false)
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
+  async function loadTimezone() {
+    try {
+      const data = await getTimezone()
+      setTzData(data)
+      setSelectedTz(data.saved || data.current || 'Europe/Moscow')
+    } catch (e) {
+      console.error('Failed to load timezone:', e)
+    }
+  }
+
+  async function handleTzSave() {
+    setTzSaving(true)
+    try {
+      await updateTimezone(selectedTz)
+      setToast({ type: 'success', message: `Timezone set to ${selectedTz}. Restart containers for full effect.` })
+      await loadTimezone()
+    } catch (e) {
+      setToast({ type: 'error', message: e.message })
+    } finally {
+      setTzSaving(false)
+      setTimeout(() => setToast(null), 5000)
+    }
+  }
+
+  async function loadLocale() {
+    try {
+      const data = await getLocale()
+      setLocaleData(data)
+      setSelectedLang(data.language || 'ru')
+    } catch (e) {
+      console.error('Failed to load locale:', e)
+    }
+  }
+
+  async function handleLocaleSave() {
+    setLocaleSaving(true)
+    try {
+      await updateLocale(selectedLang)
+      setToast({ type: 'success', message: `Language set to ${selectedLang}` })
+      await loadLocale()
+    } catch (e) {
+      setToast({ type: 'error', message: e.message })
+    } finally {
+      setLocaleSaving(false)
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
+  async function handleSearchSave() {
+    setSearchSaving(true)
+    try {
+      await updateSearchConfig(searchConfig)
+      setToast({ type: 'success', message: t('toast.search_saved') })
+    } catch (e) {
+      setToast({ type: 'error', message: e.message })
+    } finally {
+      setSearchSaving(false)
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
 
   async function loadAccessSettings() {
     try {
@@ -39,7 +160,7 @@ function Config() {
     try {
       await setAccessMode(mode)
       setAccess(prev => ({ ...prev, mode }))
-      setToast({ type: 'success', message: `Mode set to: ${mode}` })
+      setToast({ type: 'success', message: t('toast.mode_set', { mode }) })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -49,7 +170,7 @@ function Config() {
   async function handleAdminIdSave() {
     const adminId = parseInt(newAdminId)
     if (!adminId || isNaN(adminId) || adminId <= 0) {
-      setToast({ type: 'error', message: 'Enter valid Telegram user ID' })
+      setToast({ type: 'error', message: t('toast.invalid_admin_id') })
       setTimeout(() => setToast(null), 3000)
       return
     }
@@ -57,7 +178,7 @@ function Config() {
       await setAdminId(adminId)
       setAccess(prev => ({ ...prev, admin_id: adminId }))
       setEditingAdminId(false)
-      setToast({ type: 'success', message: `Admin ID set to: ${adminId}` })
+      setToast({ type: 'success', message: t('toast.admin_id_set', { id: adminId }) })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -67,7 +188,7 @@ function Config() {
   async function handleAddUser() {
     const userId = parseInt(newUserId)
     if (!userId || isNaN(userId)) {
-      setToast({ type: 'error', message: 'Enter valid user ID' })
+      setToast({ type: 'error', message: t('toast.invalid_user_id') })
       setTimeout(() => setToast(null), 3000)
       return
     }
@@ -75,7 +196,7 @@ function Config() {
       const result = await updateAllowlist(userId, 'add')
       setAllowlist(result.allowlist)
       setNewUserId('')
-      setToast({ type: 'success', message: `User ${userId} added` })
+      setToast({ type: 'success', message: t('toast.user_added', { id: userId }) })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -86,7 +207,7 @@ function Config() {
     try {
       const result = await updateAllowlist(userId, 'remove')
       setAllowlist(result.allowlist)
-      setToast({ type: 'success', message: `User ${userId} removed` })
+      setToast({ type: 'success', message: t('toast.user_removed', { id: userId }) })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -150,7 +271,7 @@ function Config() {
       // Don't send access in config - it's managed separately
       const { access: _, ...configWithoutAccess } = config
       await updateConfig(configWithoutAccess)
-      setToast({ type: 'success', message: 'Configuration saved!' })
+      setToast({ type: 'success', message: t('toast.config_saved') })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     } finally {
@@ -170,16 +291,16 @@ function Config() {
   }
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
-  const tabs = ['access', 'agent', 'bot', 'security', 'limits']
+  const tabs = ['access', 'search', 'asr', 'agent', 'bot', 'security', 'limits']
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Configuration</h1>
-        <p className="page-subtitle">Adjust system settings</p>
+        <h1 className="page-title">{t('config.title')}</h1>
+        <p className="page-subtitle">{t('config.subtitle')}</p>
       </div>
 
       <div className="tabs">
@@ -189,7 +310,7 @@ function Config() {
             className={`tab ${activeTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {t(`config.tab.${tab}`)}
           </button>
         ))}
       </div>
@@ -198,15 +319,15 @@ function Config() {
         {activeTab === 'access' && (
           <>
             <div style={{ marginBottom: '24px' }}>
-              <h3 style={{ marginBottom: '8px', color: '#e74c3c' }}>🔐 Access Control</h3>
+              <h3 style={{ marginBottom: '8px', color: '#e74c3c' }}>{t('config.access.title')}</h3>
               <p style={{ color: '#888', fontSize: '14px' }}>
-                Start/stop services. When stopped, the container is completely down.
+                {t('config.access.desc')}
               </p>
             </div>
             
             {/* Admin ID */}
             <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ marginBottom: '12px' }}>👑 Admin User</h4>
+              <h4 style={{ marginBottom: '12px' }}>{t('config.access.admin_title')}</h4>
               <div style={{ 
                 padding: '12px 16px', 
                 background: '#1a1a2a', 
@@ -221,13 +342,13 @@ function Config() {
                     <input 
                       type="text"
                       className="form-input"
-                      placeholder="Telegram User ID"
+                      placeholder={t('config.access.add_user_placeholder')}
                       value={newAdminId}
                       onChange={e => setNewAdminId(e.target.value)}
                       style={{ flex: 1 }}
                     />
                     <button className="btn btn-primary" onClick={handleAdminIdSave}>
-                      ✓ Save
+                      {t('config.access.save')}
                     </button>
                     <button className="btn btn-secondary" onClick={() => setEditingAdminId(false)}>
                       ✕
@@ -236,13 +357,13 @@ function Config() {
                 ) : (
                   <>
                     <div>
-                      <span style={{ color: '#888', fontSize: '13px' }}>Admin ID: </span>
+                      <span style={{ color: '#888', fontSize: '13px' }}>{t('config.access.admin_label')} </span>
                       <span style={{ fontFamily: 'monospace', fontSize: '15px' }}>
-                        {access?.admin_id || 'Not set'}
+                        {access?.admin_id || t('config.access.not_set')}
                       </span>
                       {!access?.admin_id || access?.admin_id === 0 ? (
                         <span style={{ color: '#e74c3c', fontSize: '12px', marginLeft: '8px' }}>
-                          ⚠️ Configure admin ID!
+                          {t('config.access.configure_warning')}
                         </span>
                       ) : null}
                     </div>
@@ -253,67 +374,67 @@ function Config() {
                         setEditingAdminId(true)
                       }}
                     >
-                      ✏️ Edit
+                      {t('config.access.edit')}
                     </button>
                   </>
                 )}
               </div>
               <p style={{ color: '#888', fontSize: '12px', marginTop: '6px' }}>
-                Get your Telegram ID from @userinfobot
+                {t('config.access.admin_hint')}
               </p>
             </div>
 
             {/* Access Mode */}
             <div style={{ marginBottom: '24px' }}>
-              <h4 style={{ marginBottom: '12px' }}>🎯 Access Mode</h4>
+              <h4 style={{ marginBottom: '12px' }}>{t('config.access.mode_title')}</h4>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <button 
                   className={`btn ${access?.mode === 'admin_only' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => handleModeChange('admin_only')}
                 >
-                  👑 Admin Only
+                  {t('config.access.mode_admin')}
                 </button>
                 <button 
                   className={`btn ${access?.mode === 'allowlist' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => handleModeChange('allowlist')}
                 >
-                  📋 Allowlist
+                  {t('config.access.mode_allowlist')}
                 </button>
                 <button 
                   className={`btn ${access?.mode === 'public' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => handleModeChange('public')}
                 >
-                  🌍 Public
+                  {t('config.access.mode_public')}
                 </button>
               </div>
               <p style={{ color: '#888', fontSize: '13px', marginTop: '8px' }}>
-                {access?.mode === 'admin_only' && `🔒 Only admin (${access?.admin_id || 'not set'}) can use the bot`}
-                {access?.mode === 'allowlist' && '📋 Admin + users in allowlist can use the bot'}
-                {access?.mode === 'public' && '⚠️ Everyone can use the bot'}
+                {access?.mode === 'admin_only' && t('config.access.mode_admin_desc', { id: access?.admin_id || t('config.access.not_set') })}
+                {access?.mode === 'allowlist' && t('config.access.mode_allowlist_desc')}
+                {access?.mode === 'public' && t('config.access.mode_public_desc')}
               </p>
             </div>
 
             {/* Allowlist */}
             {access?.mode === 'allowlist' && (
               <div style={{ marginBottom: '24px', padding: '16px', background: '#1a1a2a', borderRadius: '8px' }}>
-                <h4 style={{ marginBottom: '12px' }}>📋 Allowlist</h4>
+                <h4 style={{ marginBottom: '12px' }}>{t('config.access.allowlist_title')}</h4>
                 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                   <input 
                     type="text"
                     className="form-input"
-                    placeholder="User ID (e.g. 123456789)"
+                    placeholder={t('config.access.add_user_placeholder')}
                     value={newUserId}
                     onChange={e => setNewUserId(e.target.value)}
                     style={{ flex: 1 }}
                   />
                   <button className="btn btn-primary" onClick={handleAddUser}>
-                    ➕ Add
+                    {t('config.access.add_user_btn')}
                   </button>
                 </div>
 
                 {allowlist.length === 0 ? (
-                  <p style={{ color: '#888', fontSize: '13px' }}>No users in allowlist (only admin has access)</p>
+                  <p style={{ color: '#888', fontSize: '13px' }}>{t('config.access.no_users')}</p>
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {allowlist.map(uid => (
@@ -347,9 +468,9 @@ function Config() {
             )}
 
             {/* Services Control */}
-            <h4 style={{ marginBottom: '12px' }}>🐳 Services</h4>
+            <h4 style={{ marginBottom: '12px' }}>{t('config.access.services_title')}</h4>
             {servicesLoading ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>Loading services...</div>
+              <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>{t('toast.loading_services')}</div>
             ) : (
               <>
                 <div style={{ 
@@ -362,10 +483,10 @@ function Config() {
                   alignItems: 'center'
                 }}>
                   <div>
-                    <span style={{ fontSize: '16px', fontWeight: '500' }}>🤖 Telegram Bot</span>
+                    <span style={{ fontSize: '16px', fontWeight: '500' }}>🤖 {t('config.access.bot_label')}</span>
                     <p style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>
-                      @localtopshbot - <span style={{ color: isServiceRunning('bot') ? '#2ecc71' : '#e74c3c' }}>
-                        {services.bot?.status || 'unknown'}
+                      @socialwarebot - <span style={{ color: isServiceRunning('bot') ? '#2ecc71' : '#e74c3c' }}>
+                        {services.bot?.status || t('misc.unknown')}
                       </span>
                     </p>
                   </div>
@@ -375,7 +496,7 @@ function Config() {
                     onClick={() => handleToggleService('bot', isServiceRunning('bot'))}
                     style={{ minWidth: '100px' }}
                   >
-                    {toggling === 'bot' ? '...' : isServiceRunning('bot') ? '⏹ Stop' : '▶ Start'}
+                    {toggling === 'bot' ? '...' : isServiceRunning('bot') ? t('services.stop') : t('services.start')}
                   </button>
                 </div>
 
@@ -388,10 +509,10 @@ function Config() {
                   alignItems: 'center'
                 }}>
                   <div>
-                    <span style={{ fontSize: '16px', fontWeight: '500' }}>👤 Userbot</span>
+                    <span style={{ fontSize: '16px', fontWeight: '500' }}>👤 {t('config.access.userbot_label')}</span>
                     <p style={{ color: '#888', fontSize: '13px', marginTop: '4px' }}>
-                      Personal account - <span style={{ color: isServiceRunning('userbot') ? '#2ecc71' : '#e74c3c' }}>
-                        {services.userbot?.status || 'not deployed'}
+                      {t('config.access.personal_account')} - <span style={{ color: isServiceRunning('userbot') ? '#2ecc71' : '#e74c3c' }}>
+                        {services.userbot?.status || t('misc.not_deployed')}
                       </span>
                     </p>
                   </div>
@@ -401,13 +522,13 @@ function Config() {
                     onClick={() => handleToggleService('userbot', isServiceRunning('userbot'))}
                     style={{ minWidth: '100px' }}
                   >
-                    {toggling === 'userbot' ? '...' : isServiceRunning('userbot') ? '⏹ Stop' : '▶ Start'}
+                    {toggling === 'userbot' ? '...' : isServiceRunning('userbot') ? t('services.stop') : t('services.start')}
                   </button>
                 </div>
 
                 <div style={{ marginTop: '16px' }}>
                   <button className="btn btn-secondary" onClick={() => { loadServices(); loadAccessSettings(); }}>
-                    🔄 Refresh
+                    {t('common.refresh')}
                   </button>
                 </div>
               </>
@@ -494,8 +615,73 @@ function Config() {
 
         {activeTab === 'bot' && (
           <>
+            {localeData && (
+              <div style={{ marginBottom: '24px', padding: '16px', borderRadius: '8px', background: '#1a1a2e' }}>
+                <h4 style={{ marginBottom: '12px' }}>{t('config.bot.language')}</h4>
+                <p style={{ color: '#888', fontSize: '13px', marginBottom: '8px' }}>
+                  {t('config.bot.language_desc')}
+                </p>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    className="form-input"
+                    style={{ flex: 1 }}
+                    value={selectedLang}
+                    onChange={e => setSelectedLang(e.target.value)}
+                  >
+                    {(localeData.supported || []).map(l => (
+                      <option key={l.code} value={l.code}>{l.name} ({l.code})</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn btn-primary"
+                    style={{ whiteSpace: 'nowrap' }}
+                    onClick={handleLocaleSave}
+                    disabled={localeSaving || selectedLang === localeData.language}
+                  >
+                    {localeSaving ? '...' : t('common.save')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {tzData && (
+              <div style={{ marginBottom: '24px', padding: '16px', borderRadius: '8px', background: '#1a1a2e' }}>
+                <h4 style={{ marginBottom: '12px' }}>{t('config.bot.timezone')}</h4>
+                {tzData.now && (
+                  <p style={{ color: '#888', fontSize: '13px', marginBottom: '8px' }}>
+                    {t('config.bot.timezone_current')}: <strong style={{ color: '#fff' }}>{tzData.now}</strong> ({tzData.current})
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    className="form-input"
+                    style={{ flex: 1 }}
+                    value={selectedTz}
+                    onChange={e => setSelectedTz(e.target.value)}
+                  >
+                    {(tzData.common || []).map(tz => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn btn-primary"
+                    style={{ whiteSpace: 'nowrap' }}
+                    onClick={handleTzSave}
+                    disabled={tzSaving || selectedTz === tzData.current}
+                  >
+                    {tzSaving ? '...' : t('common.save')}
+                  </button>
+                </div>
+                {selectedTz !== tzData.current && (
+                  <p style={{ color: '#f90', fontSize: '12px', marginTop: '6px' }}>
+                    {t('config.bot.timezone_restart')}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="toggle">
-              <span className="toggle-label">Enable Reactions</span>
+              <span className="toggle-label">{t('config.bot.reactions')}</span>
               <label className="toggle-switch">
                 <input 
                   type="checkbox"
@@ -506,7 +692,7 @@ function Config() {
               </label>
             </div>
             <div className="toggle">
-              <span className="toggle-label">Enable Random Thoughts</span>
+              <span className="toggle-label">{t('config.bot.thoughts')}</span>
               <label className="toggle-switch">
                 <input 
                   type="checkbox"
@@ -517,7 +703,7 @@ function Config() {
               </label>
             </div>
             <div className="form-group" style={{ marginTop: '16px' }}>
-              <label className="form-label">Reaction Chance</label>
+              <label className="form-label">{t('config.bot.reaction_chance')}</label>
               <div className="range-container">
                 <input 
                   type="range"
@@ -559,7 +745,7 @@ function Config() {
         {activeTab === 'security' && (
           <>
             <div className="toggle">
-              <span className="toggle-label">Command Approval Required</span>
+              <span className="toggle-label">{t('config.security.prompt_filter')}</span>
               <label className="toggle-switch">
                 <input 
                   type="checkbox"
@@ -570,7 +756,7 @@ function Config() {
               </label>
             </div>
             <div className="toggle">
-              <span className="toggle-label">Block Sensitive Patterns</span>
+              <span className="toggle-label">{t('config.security.block_patterns')}</span>
               <label className="toggle-switch">
                 <input 
                   type="checkbox"
@@ -581,7 +767,7 @@ function Config() {
               </label>
             </div>
             <div className="toggle">
-              <span className="toggle-label">Sandbox Isolation</span>
+              <span className="toggle-label">{t('config.security.sandbox')}</span>
               <label className="toggle-switch">
                 <input 
                   type="checkbox"
@@ -592,7 +778,7 @@ function Config() {
               </label>
             </div>
             <div className="form-group" style={{ marginTop: '16px' }}>
-              <label className="form-label">Max Blocked Commands Before Lock</label>
+              <label className="form-label">{t('config.security.max_blocked')}</label>
               <div className="range-container">
                 <input 
                   type="range"
@@ -608,10 +794,237 @@ function Config() {
           </>
         )}
 
+        {activeTab === 'search' && searchConfig && (
+          <>
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ marginBottom: '8px' }}>{t('config.search.title')}</h3>
+              <p style={{ color: '#888', fontSize: '14px' }}>
+                {t('config.search.desc')}
+              </p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.search.mode')}</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['coding', 'legacy'].map(mode => (
+                  <button
+                    key={mode}
+                    className={`btn ${searchConfig.mode === mode ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setSearchConfig(prev => ({ ...prev, mode }))}
+                    style={{ flex: 1 }}
+                  >
+                    {mode === 'coding' ? '⚡ Coding Plan' : '📡 Legacy API'}
+                  </button>
+                ))}
+              </div>
+              <p style={{ color: '#888', fontSize: '12px', marginTop: '6px' }}>
+                {searchConfig.mode === 'coding' 
+                  ? t('config.search.mode_coding_desc')
+                  : t('config.search.mode_basic_desc')
+                }
+              </p>
+            </div>
+
+            {searchConfig.mode === 'coding' && (
+              <div className="form-group">
+                <label className="form-label">{t('config.search.model')}</label>
+                <select
+                  className="form-input"
+                  value={searchConfig.model || 'glm-4.7-flash'}
+                  onChange={e => setSearchConfig(prev => ({ ...prev, model: e.target.value }))}
+                >
+                  <option value="glm-4.7-flash">glm-4.7-flash (fast)</option>
+                  <option value="glm-4.7-flashx">glm-4.7-flashx (faster)</option>
+                  <option value="glm-4.7">glm-4.7 (best quality)</option>
+                  <option value="glm-4.5-flash">glm-4.5-flash</option>
+                </select>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">{t('config.search.response_model')}</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. glm-4.7-flash (empty = use main model)"
+                value={searchConfig.response_model || ''}
+                onChange={e => setSearchConfig(prev => ({ ...prev, response_model: e.target.value }))}
+              />
+              <p style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>
+                {searchConfig.response_model
+                  ? `${t('config.search.response_model_desc_on')} ${searchConfig.response_model}`
+                  : t('config.search.response_model_desc_off')
+                }
+              </p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.search.results_count')}</label>
+              <div className="range-container">
+                <input
+                  type="range"
+                  className="range-input"
+                  min="1"
+                  max="20"
+                  value={searchConfig.count || 10}
+                  onChange={e => setSearchConfig(prev => ({ ...prev, count: parseInt(e.target.value) }))}
+                />
+                <span className="range-value">{searchConfig.count || 10}</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.search.recency')}</label>
+              <select
+                className="form-input"
+                value={searchConfig.recency_filter || 'noLimit'}
+                onChange={e => setSearchConfig(prev => ({ ...prev, recency_filter: e.target.value }))}
+              >
+                <option value="noLimit">No limit</option>
+                <option value="oneDay">Last 24 hours</option>
+                <option value="oneWeek">Last week</option>
+                <option value="oneMonth">Last month</option>
+                <option value="oneYear">Last year</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.search.timeout')}</label>
+              <div className="range-container">
+                <input
+                  type="range"
+                  className="range-input"
+                  min="30"
+                  max="300"
+                  step="10"
+                  value={searchConfig.timeout || 120}
+                  onChange={e => setSearchConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) }))}
+                />
+                <span className="range-value">{searchConfig.timeout || 120}s</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+              <button className="btn btn-primary" onClick={handleSearchSave} disabled={searchSaving}>
+                {searchSaving ? t('common.saving') : t('config.search.save')}
+              </button>
+              <button className="btn btn-secondary" onClick={loadSearchConfig}>
+                {t('common.reset')}
+              </button>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'asr' && asrConfig && (
+          <>
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ marginBottom: '8px' }}>{t('config.asr.title')}</h3>
+              <p style={{ color: '#888', fontSize: '14px' }}>
+                {t('config.asr.desc')}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: asrHealth?.status === 'ready' ? '#1a3a1a' : asrHealth?.status === 'disabled' ? '#2a2a2a' : '#3a1a1a' }}>
+              <span style={{ fontWeight: 'bold' }}>
+                {asrHealth?.status === 'ready' ? t('config.asr.online') : asrHealth?.status === 'disabled' ? t('config.asr.disabled_status') : t('config.asr.offline')}
+              </span>
+              {asrHealth?.model_name && <span style={{ color: '#888', marginLeft: '12px' }}>Model: {asrHealth.model_name}</span>}
+              {asrHealth?.device && <span style={{ color: '#888', marginLeft: '12px' }}>Device: {asrHealth.device}</span>}
+              {asrHealth?.error && <span style={{ color: '#f66', marginLeft: '12px' }}>{asrHealth.error}</span>}
+              <button className="btn btn-secondary" style={{ marginLeft: '12px', padding: '4px 12px', fontSize: '12px' }} onClick={loadASRConfig}>
+                {t('common.refresh')}
+              </button>
+            </div>
+
+            <div className="toggle">
+              <span className="toggle-label">{t('config.asr.enable')}</span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={asrConfig.enabled ?? true}
+                  onChange={e => setAsrConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.asr.url')}</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="http://host.docker.internal:8080"
+                value={asrConfig.url || ''}
+                onChange={e => setAsrConfig(prev => ({ ...prev, url: e.target.value }))}
+              />
+              <p style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>
+                {t('config.asr.url_desc')}
+              </p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.asr.language')}</label>
+              <select
+                className="form-input"
+                value={asrConfig.language || 'ru'}
+                onChange={e => setAsrConfig(prev => ({ ...prev, language: e.target.value }))}
+              >
+                <option value="ru">Russian (ru)</option>
+                <option value="en">English (en)</option>
+                <option value="uk">Ukrainian (uk)</option>
+                <option value="de">German (de)</option>
+                <option value="fr">French (fr)</option>
+                <option value="">Auto-detect</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.asr.max_duration')}</label>
+              <div className="range-container">
+                <input
+                  type="range"
+                  className="range-input"
+                  min="10"
+                  max="300"
+                  step="10"
+                  value={asrConfig.max_duration || 120}
+                  onChange={e => setAsrConfig(prev => ({ ...prev, max_duration: parseInt(e.target.value) }))}
+                />
+                <span className="range-value">{asrConfig.max_duration || 120}s</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">{t('config.asr.timeout')}</label>
+              <div className="range-container">
+                <input
+                  type="range"
+                  className="range-input"
+                  min="10"
+                  max="120"
+                  step="5"
+                  value={asrConfig.timeout || 60}
+                  onChange={e => setAsrConfig(prev => ({ ...prev, timeout: parseInt(e.target.value) }))}
+                />
+                <span className="range-value">{asrConfig.timeout || 60}s</span>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+              <button className="btn btn-primary" onClick={handleASRSave} disabled={asrSaving}>
+                {asrSaving ? t('common.saving') : t('config.asr.save')}
+              </button>
+              <button className="btn btn-secondary" onClick={loadASRConfig}>
+                {t('common.reset')}
+              </button>
+            </div>
+          </>
+        )}
+
         {activeTab === 'limits' && (
           <>
             <div className="form-group">
-              <label className="form-label">Sandbox TTL (minutes)</label>
+              <label className="form-label">{t('config.limits.sandbox_ttl')}</label>
               <div className="range-container">
                 <input 
                   type="range"
@@ -625,7 +1038,7 @@ function Config() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Sandbox Memory Limit</label>
+              <label className="form-label">{t('config.limits.sandbox_memory')}</label>
               <input 
                 type="text"
                 className="form-input"
@@ -634,7 +1047,7 @@ function Config() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Workspace Disk Limit (MB)</label>
+              <label className="form-label">{t('config.limits.max_tool_output')}</label>
               <div className="range-container">
                 <input 
                   type="range"
@@ -649,7 +1062,7 @@ function Config() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Max Concurrent Users</label>
+              <label className="form-label">{t('config.limits.max_context')}</label>
               <div className="range-container">
                 <input 
                   type="range"
@@ -667,10 +1080,10 @@ function Config() {
 
         <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : '💾 Save Changes'}
+            {saving ? t('common.saving') : t('common.save')}
           </button>
           <button className="btn btn-secondary" onClick={loadConfig}>
-            🔄 Reset
+            {t('common.reset')}
           </button>
         </div>
       </div>

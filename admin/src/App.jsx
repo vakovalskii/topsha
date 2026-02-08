@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { useT } from './i18n'
 import Dashboard from './pages/Dashboard'
 import Services from './pages/Services'
 import Config from './pages/Config'
@@ -15,6 +16,7 @@ import Prompt from './pages/Prompt'
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
+  const { t } = useT()
   
   // Close menu on route change
   useEffect(() => {
@@ -57,20 +59,20 @@ function App() {
           <h1>Topsha</h1>
         </div>
         <nav className="sidebar-nav">
-          <NavLink to="/" end>📊 Dashboard</NavLink>
-          <NavLink to="/services">🐳 Services</NavLink>
-          <NavLink to="/config">⚙️ Config</NavLink>
-          <NavLink to="/prompt">📝 Prompt</NavLink>
-          <NavLink to="/security">🛡️ Security</NavLink>
-          <NavLink to="/tools">🔧 Tools</NavLink>
-          <NavLink to="/mcp">🔌 MCP</NavLink>
-          <NavLink to="/skills">🎯 Skills</NavLink>
-          <NavLink to="/tasks">⏰ Tasks</NavLink>
-          <NavLink to="/users">👥 Users</NavLink>
-          <NavLink to="/logs">📜 Logs</NavLink>
+          <NavLink to="/" end>{t('nav.dashboard')}</NavLink>
+          <NavLink to="/services">{t('nav.services')}</NavLink>
+          <NavLink to="/config">{t('nav.config')}</NavLink>
+          <NavLink to="/prompt">{t('nav.prompt')}</NavLink>
+          <NavLink to="/security">{t('nav.security')}</NavLink>
+          <NavLink to="/tools">{t('nav.tools')}</NavLink>
+          <NavLink to="/mcp">{t('nav.mcp')}</NavLink>
+          <NavLink to="/skills">{t('nav.skills')}</NavLink>
+          <NavLink to="/tasks">{t('nav.tasks')}</NavLink>
+          <NavLink to="/users">{t('nav.users')}</NavLink>
+          <NavLink to="/logs">{t('nav.logs')}</NavLink>
         </nav>
         <div className="sidebar-footer">
-          AI Agent Framework v1.0
+          {t('footer.version')}
         </div>
       </aside>
       <main className="main">

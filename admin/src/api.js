@@ -120,6 +120,35 @@ export const installSkill = (name) => fetchApi('/skills/install', {
 })
 export const uninstallSkill = (name) => fetchApi(`/skills/${name}`, { method: 'DELETE' })
 
+// Search Config
+export const getSearchConfig = () => fetchApi('/search')
+export const updateSearchConfig = (data) => fetchApi('/search', {
+  method: 'PUT',
+  body: JSON.stringify(data)
+})
+
+// Locale
+export const getLocale = () => fetchApi('/locale')
+export const updateLocale = (language) => fetchApi('/locale', {
+  method: 'PUT',
+  body: JSON.stringify({ language })
+})
+
+// Timezone
+export const getTimezone = () => fetchApi('/timezone')
+export const updateTimezone = (timezone) => fetchApi('/timezone', {
+  method: 'PUT',
+  body: JSON.stringify({ timezone })
+})
+
+// ASR Config
+export const getASRConfig = () => fetchApi('/asr')
+export const updateASRConfig = (data) => fetchApi('/asr', {
+  method: 'PUT',
+  body: JSON.stringify(data)
+})
+export const getASRHealth = () => fetchApi('/asr/health')
+
 // System Prompt
 export const getPrompt = () => fetchApi('/prompt')
 export const updatePrompt = (content) => fetchApi('/prompt', {
@@ -152,6 +181,14 @@ export const api = {
   getMcpServers, addMcpServer, removeMcpServer, toggleMcpServer, refreshMcpServer, refreshAllMcp,
   // Skills
   getSkills, getAvailableSkills, toggleSkill, scanSkills, installSkill, uninstallSkill,
+  // Search
+  getSearchConfig, updateSearchConfig,
+  // Locale
+  getLocale, updateLocale,
+  // Timezone
+  getTimezone, updateTimezone,
+  // ASR
+  getASRConfig, updateASRConfig, getASRHealth,
   // Prompt
   getPrompt, updatePrompt, restorePrompt
 }

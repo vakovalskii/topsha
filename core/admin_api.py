@@ -1074,6 +1074,275 @@ async def run_task_now(task_id: str):
         raise HTTPException(503, f"Scheduler unavailable: {e}")
 
 
+# ============ SEARCH CONFIG ============
+
+SEARCH_CONFIG_FILE = "/data/search_config.json"
+
+DEFAULT_SEARCH_CONFIG = {
+    "mode": "coding",
+    "model": "glm-4.7-flash",
+    "count": 10,
+    "recency_filter": "noLimit",
+    "timeout": 120,
+    "response_model": ""
+}
+
+
+class SearchConfigUpdate(BaseModel):
+    mode: Optional[str] = None
+    model: Optional[str] = None
+    count: Optional[int] = None
+    recency_filter: Optional[str] = None
+    timeout: Optional[int] = None
+    response_model: Optional[str] = None
+
+
+@router.get("/search")
+async def get_search_config():
+    """Get search configuration"""
+    try:
+        if os.path.exists(SEARCH_CONFIG_FILE):
+            with open(SEARCH_CONFIG_FILE) as f:
+                saved = json.load(f)
+                return {**DEFAULT_SEARCH_CONFIG, **saved}
+    except:
+        pass
+    return DEFAULT_SEARCH_CONFIG.copy()
+
+
+@router.put("/search")
+async def update_search_config(data: SearchConfigUpdate):
+    """Update search configuration
+    
+    mode: 'coding' (Coding Plan - Chat Completions + tools) or 'legacy' (separate web_search endpoint)
+    model: ZAI model for coding mode (e.g. glm-4.7-flash, glm-4.7)
+    count: number of search results (1-50)
+    recency_filter: oneDay, oneWeek, oneMonth, oneYear, noLimit
+    timeout: request timeout in seconds
+    """
+    try:
+        config = DEFAULT_SEARCH_CONFIG.copy()
+        if os.path.exists(SEARCH_CONFIG_FILE):
+            with open(SEARCH_CONFIG_FILE) as f:
+                config = {**config, **json.load(f)}
+    except:
+        pass
+    
+    updates = data.model_dump(exclude_none=True)
+    # Allow explicitly setting response_model to empty string
+    if data.response_model is not None:
+        updates["response_model"] = data.response_model
+    if "mode" in updates and updates["mode"] not in ("coding", "legacy"):
+        raise HTTPException(400, "mode must be 'coding' or 'legacy'")
+    if "recency_filter" in updates and updates["recency_filter"] not in ("oneDay", "oneWeek", "oneMonth", "oneYear", "noLimit"):
+        raise HTTPException(400, "recency_filter must be oneDay, oneWeek, oneMonth, oneYear, or noLimit")
+    
+    config.update(updates)
+    
+    os.makedirs(os.path.dirname(SEARCH_CONFIG_FILE), exist_ok=True)
+    with open(SEARCH_CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+    
+    return {"success": True, **config}
+
+
+# ============ LOCALE (Language) ============
+
+LOCALE_CONFIG_FILE = "/data/bot_locale.json"
+
+SUPPORTED_LANGUAGES = [
+    {"code": "ru", "name": "Русский"},
+    {"code": "en", "name": "English"},
+]
+
+
+class LocaleUpdate(BaseModel):
+    language: str
+
+
+@router.get("/locale")
+async def get_locale():
+    """Get current bot language setting"""
+    lang = "ru"
+    try:
+        if os.path.exists(LOCALE_CONFIG_FILE):
+            with open(LOCALE_CONFIG_FILE) as f:
+                data = json.load(f)
+                lang = data.get("language", "ru")
+    except:
+        pass
+    return {"language": lang, "supported": SUPPORTED_LANGUAGES}
+
+
+@router.put("/locale")
+async def update_locale(data: LocaleUpdate):
+    """Update bot language"""
+    lang = data.language.strip().lower()
+    supported_codes = [l["code"] for l in SUPPORTED_LANGUAGES]
+    if lang not in supported_codes:
+        raise HTTPException(400, f"Unsupported language: {lang}. Supported: {supported_codes}")
+    
+    os.makedirs(os.path.dirname(LOCALE_CONFIG_FILE), exist_ok=True)
+    with open(LOCALE_CONFIG_FILE, "w") as f:
+        json.dump({"language": lang}, f)
+    
+    return {"success": True, "language": lang}
+
+
+# ============ TIMEZONE ============
+
+TIMEZONE_CONFIG_FILE = "/data/timezone.json"
+
+COMMON_TIMEZONES = [
+    "Europe/Moscow", "Europe/Kiev", "Europe/Minsk",
+    "Europe/London", "Europe/Berlin", "Europe/Paris",
+    "America/New_York", "America/Chicago", "America/Los_Angeles",
+    "Asia/Tokyo", "Asia/Shanghai", "Asia/Dubai",
+    "UTC",
+]
+
+
+@router.get("/timezone")
+async def get_timezone():
+    """Get current timezone setting"""
+    current_tz = os.getenv("TZ", "UTC")
+    saved_tz = current_tz
+    try:
+        if os.path.exists(TIMEZONE_CONFIG_FILE):
+            with open(TIMEZONE_CONFIG_FILE) as f:
+                data = json.load(f)
+                saved_tz = data.get("timezone", current_tz)
+    except:
+        pass
+    
+    now = None
+    try:
+        from datetime import datetime
+        import subprocess
+        result = subprocess.run(["date", "+%Y-%m-%d %H:%M:%S %Z"], capture_output=True, text=True, timeout=5)
+        now = result.stdout.strip() if result.returncode == 0 else None
+    except:
+        from datetime import datetime
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    return {
+        "current": current_tz,
+        "saved": saved_tz,
+        "now": now,
+        "common": COMMON_TIMEZONES,
+    }
+
+
+class TimezoneUpdate(BaseModel):
+    timezone: str
+
+
+@router.put("/timezone")
+async def update_timezone(data: TimezoneUpdate):
+    """Save timezone setting. Requires container restart to take effect."""
+    tz = data.timezone.strip()
+    if not tz:
+        raise HTTPException(400, "Timezone cannot be empty")
+    
+    os.makedirs(os.path.dirname(TIMEZONE_CONFIG_FILE), exist_ok=True)
+    with open(TIMEZONE_CONFIG_FILE, "w") as f:
+        json.dump({"timezone": tz}, f)
+    
+    # Also update current process TZ (takes effect immediately for this container)
+    os.environ["TZ"] = tz
+    try:
+        import time
+        time.tzset()
+    except:
+        pass
+    
+    return {"success": True, "timezone": tz, "note": "Restart all containers for full effect"}
+
+
+# ============ ASR CONFIG ============
+
+ASR_CONFIG_FILE = "/data/asr_config.json"
+
+DEFAULT_ASR_CONFIG = {
+    "enabled": True,
+    "url": "http://host.docker.internal:8080",
+    "language": "ru",
+    "max_duration": 120,
+    "timeout": 60,
+}
+
+
+class ASRConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    url: Optional[str] = None
+    language: Optional[str] = None
+    max_duration: Optional[int] = None
+    timeout: Optional[int] = None
+
+
+@router.get("/asr")
+async def get_asr_config():
+    """Get ASR (Speech-to-Text) configuration"""
+    try:
+        if os.path.exists(ASR_CONFIG_FILE):
+            with open(ASR_CONFIG_FILE) as f:
+                saved = json.load(f)
+                return {**DEFAULT_ASR_CONFIG, **saved}
+    except:
+        pass
+    return DEFAULT_ASR_CONFIG.copy()
+
+
+@router.put("/asr")
+async def update_asr_config(data: ASRConfigUpdate):
+    """Update ASR configuration"""
+    try:
+        config = DEFAULT_ASR_CONFIG.copy()
+        if os.path.exists(ASR_CONFIG_FILE):
+            with open(ASR_CONFIG_FILE) as f:
+                config = {**config, **json.load(f)}
+    except:
+        pass
+    
+    updates = data.model_dump(exclude_none=True)
+    config.update(updates)
+    
+    os.makedirs(os.path.dirname(ASR_CONFIG_FILE), exist_ok=True)
+    with open(ASR_CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=2)
+    
+    return {"success": True, **config}
+
+
+@router.get("/asr/health")
+async def check_asr_health():
+    """Check ASR server health"""
+    import aiohttp
+    config = DEFAULT_ASR_CONFIG.copy()
+    try:
+        if os.path.exists(ASR_CONFIG_FILE):
+            with open(ASR_CONFIG_FILE) as f:
+                config = {**config, **json.load(f)}
+    except:
+        pass
+    
+    url = config.get("url", "")
+    if not url:
+        return {"status": "disabled", "url": ""}
+    
+    try:
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(f"{url}/health/ready") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    data["url"] = url
+                    return data
+                return {"status": "error", "url": url, "http_status": resp.status}
+    except Exception as e:
+        return {"status": "error", "url": url, "error": str(e)}
+
+
 # ============ SYSTEM PROMPT ============
 
 SYSTEM_PROMPT_PATH = os.path.join(os.path.dirname(__file__), "src", "agent", "system.txt")

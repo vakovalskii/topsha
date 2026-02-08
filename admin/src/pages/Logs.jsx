@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { getLogs, getServices } from '../api'
+import { useT } from '../i18n'
 
 function Logs() {
+  const { t } = useT()
   const [services, setServices] = useState([])
   const [activeService, setActiveService] = useState('core')
   const [logs, setLogs] = useState([])
@@ -58,15 +60,15 @@ function Logs() {
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Logs</h1>
-        <p className="page-subtitle">View service logs in real-time</p>
+        <h1 className="page-title">{t('logs.title')}</h1>
+        <p className="page-subtitle">{t('logs.subtitle')}</p>
       </div>
 
       {/* Controls */}
       <div className="card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label">Service</label>
+            <label className="form-label">{t('logs.service')}</label>
             <select 
               className="form-input" 
               style={{ width: '150px' }}
@@ -80,7 +82,7 @@ function Logs() {
           </div>
           
           <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label">Lines</label>
+            <label className="form-label">{t('logs.lines')}</label>
             <select 
               className="form-input"
               style={{ width: '100px' }}
@@ -103,11 +105,11 @@ function Logs() {
               />
               <span className="toggle-slider"></span>
             </label>
-            <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>Auto-refresh</span>
+            <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>{t('logs.auto_refresh')}</span>
           </div>
           
           <button className="btn btn-secondary" onClick={loadLogs}>
-            🔄 Refresh
+            {t('logs.refresh')}
           </button>
         </div>
       </div>
@@ -115,18 +117,18 @@ function Logs() {
       {/* Log viewer */}
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">{activeService} logs</h2>
+          <h2 className="card-title">{activeService} {t('logs.logs_of')}</h2>
           <span style={{ color: 'var(--text-dim)', fontSize: '13px' }}>
-            {logs.length} lines
+            {logs.length} {t('logs.lines_count')}
           </span>
         </div>
         
         {loading ? (
-          <div className="loading"><div className="spinner"></div>Loading...</div>
+          <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
         ) : (
           <div className="log-container" ref={logRef} style={{ height: '600px' }}>
             {logs.length === 0 ? (
-              <p style={{ color: 'var(--text-dim)' }}>No logs available</p>
+              <p style={{ color: 'var(--text-dim)' }}>{t('logs.no_logs')}</p>
             ) : (
               logs.map((line, i) => (
                 <div key={i} className={`log-line ${getLogClass(line)}`}>

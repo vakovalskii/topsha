@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getTools, toggleTool } from '../api'
+import { useT } from '../i18n'
 
 function Tools() {
+  const { t } = useT()
   const [tools, setTools] = useState([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState(null)
@@ -27,7 +29,7 @@ function Tools() {
       setTools(tools.map(t => 
         t.name === name ? { ...t, enabled } : t
       ))
-      setToast({ type: 'success', message: `Tool ${enabled ? 'enabled' : 'disabled'}` })
+      setToast({ type: 'success', message: t('toast.tool_toggled', { state: enabled ? t('toast.enabled') : t('toast.disabled') }) })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -35,14 +37,14 @@ function Tools() {
   }
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Agent Tools</h1>
-        <p className="page-subtitle">Enable or disable available tools</p>
+        <h1 className="page-title">{t('tools.title')}</h1>
+        <p className="page-subtitle">{t('tools.subtitle')}</p>
       </div>
 
       <div className="grid grid-2">
@@ -54,7 +56,7 @@ function Tools() {
                   {tool.icon || '🔧'} {tool.name}
                 </h3>
                 <p style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '12px' }}>
-                  {tool.description || 'No description'}
+                  {tool.description || t('tools.no_description')}
                 </p>
                 {tool.usage_count !== undefined && (
                   <span style={{ 
@@ -64,7 +66,7 @@ function Tools() {
                     padding: '4px 8px',
                     borderRadius: '4px'
                   }}>
-                    Used {tool.usage_count} times
+                    {t('tools.used_times', { count: tool.usage_count })}
                   </span>
                 )}
               </div>
@@ -84,7 +86,7 @@ function Tools() {
       {tools.length === 0 && (
         <div className="card">
           <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '20px' }}>
-            No tools available
+            {t('tools.no_tools')}
           </p>
         </div>
       )}

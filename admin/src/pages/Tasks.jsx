@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useT } from '../i18n';
 
 const API_BASE = '/api/admin';
 
 function Tasks() {
+  const { t } = useT();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
@@ -27,17 +29,17 @@ function Tasks() {
   }
 
   async function cancelTask(taskId) {
-    if (!window.confirm(`Cancel task ${taskId}?`)) return;
+    if (!window.confirm(t('confirm.cancel_task', { id: taskId }))) return;
     
     try {
       const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        setToast({ type: 'success', message: 'Task cancelled' });
+        setToast({ type: 'success', message: t('toast.task_cancelled') });
         loadTasks();
       } else {
-        throw new Error('Failed to cancel');
+        throw new Error(t('toast.failed_cancel'));
       }
     } catch (e) {
       setToast({ type: 'error', message: e.message });
@@ -54,39 +56,39 @@ function Tasks() {
   }
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>;
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>;
   }
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">⏰ Scheduled Tasks</h1>
-        <p className="page-subtitle">Agent's scheduled and recurring tasks</p>
+        <h1 className="page-title">{t('tasks.title')}</h1>
+        <p className="page-subtitle">{t('tasks.subtitle')}</p>
       </div>
 
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">Active Tasks ({tasks.length})</h2>
-          <button onClick={loadTasks} className="btn btn-secondary btn-sm">Refresh</button>
+          <h2 className="card-title">{t('tasks.active_tasks')} ({tasks.length})</h2>
+          <button onClick={loadTasks} className="btn btn-secondary btn-sm">{t('tasks.refresh')}</button>
         </div>
 
         {tasks.length === 0 ? (
           <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '40px' }}>
-            No scheduled tasks. Agent can create tasks using the <code>schedule_task</code> tool.
+            {t('tasks.no_tasks')}
           </p>
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>User</th>
-                <th>Type</th>
-                <th>Content</th>
-                <th>Next Run</th>
-                <th>Time Left</th>
-                <th>Recurring</th>
-                <th>Source</th>
-                <th>Actions</th>
+                <th>{t('tasks.col_id')}</th>
+                <th>{t('tasks.col_user')}</th>
+                <th>{t('tasks.col_type')}</th>
+                <th>{t('tasks.col_content')}</th>
+                <th>{t('tasks.col_next_run')}</th>
+                <th>{t('tasks.col_time_left')}</th>
+                <th>{t('tasks.col_recurring')}</th>
+                <th>{t('tasks.col_source')}</th>
+                <th>{t('tasks.col_actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -125,10 +127,10 @@ function Tasks() {
                   <td>
                     {task.recurring ? (
                       <span style={{ color: 'var(--success)' }}>
-                        🔄 every {task.interval_minutes}m
+                        {t('tasks.recurring_every', { min: task.interval_minutes })}
                       </span>
                     ) : (
-                      <span style={{ color: 'var(--text-dim)' }}>once</span>
+                      <span style={{ color: 'var(--text-dim)' }}>{t('tasks.once')}</span>
                     )}
                   </td>
                   <td>
@@ -141,7 +143,7 @@ function Tasks() {
                       onClick={() => cancelTask(task.id)} 
                       className="btn btn-danger btn-sm"
                     >
-                      Cancel
+                      {t('tasks.cancel')}
                     </button>
                   </td>
                 </tr>
@@ -153,18 +155,18 @@ function Tasks() {
 
       <div className="card" style={{ marginTop: '20px' }}>
         <div className="card-header">
-          <h2 className="card-title">📖 Task Types</h2>
+          <h2 className="card-title">{t('tasks.task_types')}</h2>
         </div>
         <div style={{ padding: '15px' }}>
           <table className="table" style={{ marginBottom: 0 }}>
             <tbody>
               <tr>
                 <td><code>message</code></td>
-                <td>Send a reminder message to the user</td>
+                <td>{t('tasks.type_message')}</td>
               </tr>
               <tr>
                 <td><code>agent</code></td>
-                <td>Run the agent with a prompt (can use tools, search, etc.)</td>
+                <td>{t('tasks.type_agent')}</td>
               </tr>
             </tbody>
           </table>

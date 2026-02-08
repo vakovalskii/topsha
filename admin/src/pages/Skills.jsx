@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getSkills, toggleSkill, scanSkills, installSkill, uninstallSkill, getAvailableSkills } from '../api'
+import { useT } from '../i18n'
 
 function Skills() {
+  const { t } = useT()
   const [skills, setSkills] = useState([])
   const [availableSkills, setAvailableSkills] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,7 +27,7 @@ function Skills() {
       setAvailableSkills(availableData.skills || [])
     } catch (e) {
       console.error('Failed to load skills:', e)
-      showToast('error', 'Failed to load skills')
+      showToast('error', t('toast.failed_load', { msg: 'skills' }))
     } finally {
       setLoading(false)
     }
@@ -42,7 +44,7 @@ function Skills() {
       setSkills(skills.map(s => 
         s.name === name ? { ...s, enabled } : s
       ))
-      showToast('success', `Skill "${name}" ${enabled ? 'enabled' : 'disabled'}`)
+      showToast('success', t('toast.skill_toggled', { name, state: enabled ? t('toast.enabled') : t('toast.disabled') }))
     } catch (e) {
       showToast('error', e.message)
     }
@@ -52,7 +54,7 @@ function Skills() {
     setScanning(true)
     try {
       const data = await scanSkills()
-      showToast('success', `Found ${data.skill_count || 0} skills`)
+      showToast('success', t('toast.skill_scanned', { count: data.skill_count || 0 }))
       loadSkills()
     } catch (e) {
       showToast('error', e.message)
@@ -65,7 +67,7 @@ function Skills() {
     setInstalling(name)
     try {
       await installSkill(name)
-      showToast('success', `Skill "${name}" installed`)
+      showToast('success', t('toast.skill_installed', { name }))
       loadSkills()
     } catch (e) {
       showToast('error', e.message)
@@ -75,10 +77,10 @@ function Skills() {
   }
 
   async function handleUninstall(name) {
-    if (!confirm(`Uninstall skill "${name}"?`)) return
+    if (!confirm(t('confirm.uninstall_skill', { name }))) return
     try {
       await uninstallSkill(name)
-      showToast('success', `Skill "${name}" uninstalled`)
+      showToast('success', t('toast.skill_uninstalled', { name }))
       loadSkills()
     } catch (e) {
       showToast('error', e.message)
@@ -86,7 +88,7 @@ function Skills() {
   }
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
   const installedNames = new Set(skills.map(s => s.name))
@@ -96,8 +98,8 @@ function Skills() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">🎯 Skills</h1>
-          <p className="page-subtitle">Extensible agent capabilities (Anthropic-style)</p>
+          <h1 className="page-title">{t('skills.title')}</h1>
+          <p className="page-subtitle">{t('skills.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
@@ -105,10 +107,10 @@ function Skills() {
             onClick={handleScan}
             disabled={scanning}
           >
-            {scanning ? '⏳ Scanning...' : '🔍 Scan Skills'}
+            {scanning ? t('skills.scanning') : t('skills.scan')}
           </button>
           <button className="btn btn-primary" onClick={() => setShowInstallModal(true)}>
-            📦 Install Skill
+            {t('skills.install_skill')}
           </button>
         </div>
       </div>
@@ -119,13 +121,13 @@ function Skills() {
           className={`tab ${activeTab === 'installed' ? 'active' : ''}`}
           onClick={() => setActiveTab('installed')}
         >
-          Installed ({skills.length})
+          {t('skills.installed_tab')} ({skills.length})
         </button>
         <button 
           className={`tab ${activeTab === 'available' ? 'active' : ''}`}
           onClick={() => setActiveTab('available')}
         >
-          Available ({notInstalled.length})
+          {t('skills.available_tab')} ({notInstalled.length})
         </button>
       </div>
 
@@ -135,9 +137,9 @@ function Skills() {
             <div className="card">
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
                 <p style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</p>
-                <p>No skills installed</p>
+                <p>{t('skills.no_skills')}</p>
                 <p style={{ fontSize: '13px', marginTop: '8px' }}>
-                  Install skills from the Available tab or create custom ones
+                  {t('skills.no_skills_hint')}
                 </p>
               </div>
             </div>
@@ -151,7 +153,7 @@ function Skills() {
                         {skill.name}
                       </h3>
                       <p style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '12px' }}>
-                        {skill.description || 'No description'}
+                        {skill.description || t('skills.no_description')}
                       </p>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {skill.version && (
@@ -196,7 +198,7 @@ function Skills() {
                   
                   {skill.commands && Object.keys(skill.commands).length > 0 && (
                     <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>Commands:</p>
+                      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>{t('skills.commands')}</p>
                       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         {Object.keys(skill.commands).map(cmd => (
                           <code key={cmd} style={{ 
@@ -224,7 +226,7 @@ function Skills() {
             <div className="card">
               <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
                 <p style={{ fontSize: '48px', marginBottom: '16px' }}>✅</p>
-                <p>All available skills are installed</p>
+                <p>{t('skills.all_installed')}</p>
               </div>
             </div>
           ) : (
@@ -237,7 +239,7 @@ function Skills() {
                         {skill.name}
                       </h3>
                       <p style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '12px' }}>
-                        {skill.description || 'No description'}
+                        {skill.description || t('skills.no_description')}
                       </p>
                       {skill.source && (
                         <span className="badge">{skill.source}</span>
@@ -248,7 +250,7 @@ function Skills() {
                       onClick={() => handleInstall(skill.name)}
                       disabled={installing === skill.name}
                     >
-                      {installing === skill.name ? '⏳' : '📥 Install'}
+                      {installing === skill.name ? '⏳' : t('skills.install_btn')}
                     </button>
                   </div>
                 </div>
@@ -262,11 +264,11 @@ function Skills() {
       {showInstallModal && (
         <div className="modal-overlay" onClick={() => setShowInstallModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2 style={{ marginBottom: '20px' }}>Install Skill</h2>
+            <h2 style={{ marginBottom: '20px' }}>{t('skills.modal_title')}</h2>
             
             <div style={{ marginBottom: '20px' }}>
               <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-dim)' }}>
-                Anthropic Skills (Official)
+                {t('skills.anthropic_official')}
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {['pptx', 'docx', 'pdf-reader', 'google-drive', 'linear', 'github'].map(name => (
@@ -287,7 +289,7 @@ function Skills() {
                       }}
                       disabled={installedNames.has(name) || installing === name}
                     >
-                      {installedNames.has(name) ? '✅ Installed' : installing === name ? '⏳' : 'Install'}
+                      {installedNames.has(name) ? t('skills.installed_badge') : installing === name ? '⏳' : t('skills.install_btn')}
                     </button>
                   </div>
                 ))}
@@ -296,7 +298,7 @@ function Skills() {
             
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setShowInstallModal(false)}>
-                Close
+                {t('skills.close')}
               </button>
             </div>
           </div>

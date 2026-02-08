@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getMcpServers, addMcpServer, removeMcpServer, toggleMcpServer, refreshMcpServer, refreshAllMcp } from '../api'
+import { useT } from '../i18n'
 
 function MCP() {
+  const { t } = useT()
   const [servers, setServers] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(null)
@@ -19,7 +21,7 @@ function MCP() {
       setServers(data.servers || [])
     } catch (e) {
       console.error('Failed to load MCP servers:', e)
-      showToast('error', 'Failed to load MCP servers')
+      showToast('error', t('toast.failed_load', { msg: 'MCP servers' }))
     } finally {
       setLoading(false)
     }
@@ -32,12 +34,12 @@ function MCP() {
 
   async function handleAdd() {
     if (!newServer.name || !newServer.url) {
-      showToast('error', 'Name and URL are required')
+      showToast('error', t('toast.name_url_required'))
       return
     }
     try {
       await addMcpServer(newServer)
-      showToast('success', `Server "${newServer.name}" added`)
+      showToast('success', t('toast.server_added', { name: newServer.name }))
       setShowAddModal(false)
       setNewServer({ name: '', url: '', description: '' })
       loadServers()
@@ -47,10 +49,10 @@ function MCP() {
   }
 
   async function handleRemove(name) {
-    if (!confirm(`Remove MCP server "${name}"?`)) return
+    if (!confirm(t('confirm.remove_server', { name }))) return
     try {
       await removeMcpServer(name)
-      showToast('success', `Server "${name}" removed`)
+      showToast('success', t('toast.server_removed', { name }))
       loadServers()
     } catch (e) {
       showToast('error', e.message)
@@ -61,7 +63,7 @@ function MCP() {
     setRefreshing(name)
     try {
       const data = await refreshMcpServer(name)
-      showToast('success', `Loaded ${data.tool_count || 0} tools from "${name}"`)
+      showToast('success', t('toast.server_refreshed', { count: data.tool_count || 0, name }))
       loadServers()
     } catch (e) {
       showToast('error', e.message)
@@ -73,7 +75,7 @@ function MCP() {
   async function handleToggle(name, currentEnabled) {
     try {
       await toggleMcpServer(name, !currentEnabled)
-      showToast('success', `Server "${name}" ${!currentEnabled ? 'enabled' : 'disabled'}`)
+      showToast('success', t('toast.server_toggled', { name, state: !currentEnabled ? t('toast.enabled') : t('toast.disabled') }))
       loadServers()
     } catch (e) {
       showToast('error', e.message)
@@ -84,7 +86,7 @@ function MCP() {
     setRefreshing('all')
     try {
       const data = await refreshAllMcp()
-      showToast('success', `Refreshed ${data.servers_refreshed || 0} servers, ${data.total_tools || 0} tools`)
+      showToast('success', t('toast.servers_refreshed', { servers: data.servers_refreshed || 0, tools: data.total_tools || 0 }))
       loadServers()
     } catch (e) {
       showToast('error', e.message)
@@ -94,15 +96,15 @@ function MCP() {
   }
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">🔌 MCP Servers</h1>
-          <p className="page-subtitle">Model Context Protocol servers for external tools</p>
+          <h1 className="page-title">{t('mcp.title')}</h1>
+          <p className="page-subtitle">{t('mcp.subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
@@ -110,10 +112,10 @@ function MCP() {
             onClick={handleRefreshAll}
             disabled={refreshing === 'all'}
           >
-            {refreshing === 'all' ? '⏳ Refreshing...' : '🔄 Refresh All'}
+            {refreshing === 'all' ? t('mcp.refreshing') : t('mcp.refresh_all')}
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            ➕ Add Server
+            {t('mcp.add_server')}
           </button>
         </div>
       </div>
@@ -122,9 +124,9 @@ function MCP() {
         <div className="card">
           <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
             <p style={{ fontSize: '48px', marginBottom: '16px' }}>🔌</p>
-            <p>No MCP servers configured</p>
+            <p>{t('mcp.no_servers')}</p>
             <p style={{ fontSize: '13px', marginTop: '8px' }}>
-              Add a server to load external tools
+              {t('mcp.no_servers_hint')}
             </p>
           </div>
         </div>
@@ -135,7 +137,7 @@ function MCP() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
                   <h3 style={{ fontSize: '16px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <label className="toggle-switch" title={server.enabled !== false ? 'Disable server' : 'Enable server'} style={{ flexShrink: 0 }}>
+                    <label className="toggle-switch" title={server.enabled !== false ? t('mcp.disable_server') : t('mcp.enable_server')} style={{ flexShrink: 0 }}>
                       <input 
                         type="checkbox" 
                         checked={server.enabled !== false}
@@ -154,7 +156,7 @@ function MCP() {
                       background: server.enabled === false ? 'var(--text-dim)' : (server.status?.connected ? 'var(--success)' : 'var(--error)')
                     }}></span>
                     {server.name}
-                    {server.enabled === false && <span className="badge" style={{ marginLeft: '8px' }}>disabled</span>}
+                    {server.enabled === false && <span className="badge" style={{ marginLeft: '8px' }}>{t('mcp.disabled')}</span>}
                   </h3>
                   <p style={{ color: 'var(--text-dim)', fontSize: '13px', marginBottom: '8px', wordBreak: 'break-all' }}>
                     {server.url}
@@ -166,11 +168,11 @@ function MCP() {
                   )}
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <span className="badge badge-info">
-                      {server.status?.tool_count || 0} tools
+                      {t('mcp.tools_count', { count: server.status?.tool_count || 0 })}
                     </span>
                     {server.status?.last_refresh && (
                       <span className="badge">
-                        Updated: {new Date(server.status.last_refresh).toLocaleTimeString()}
+                        {new Date(server.status.last_refresh).toLocaleTimeString()}
                       </span>
                     )}
                   </div>
@@ -180,14 +182,14 @@ function MCP() {
                     className="btn btn-small btn-secondary"
                     onClick={() => handleRefresh(server.name)}
                     disabled={refreshing === server.name}
-                    title="Refresh tools"
+                    title={t('common.refresh')}
                   >
                     {refreshing === server.name ? '⏳' : '🔄'}
                   </button>
                   <button 
                     className="btn btn-small btn-danger"
                     onClick={() => handleRemove(server.name)}
-                    title="Remove server"
+                    title={t('common.delete')}
                   >
                     🗑️
                   </button>
@@ -196,7 +198,7 @@ function MCP() {
               
               {server.status?.tools && server.status.tools.length > 0 && (
                 <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                  <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>Available tools:</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>{t('mcp.available_tools')}</p>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {server.status.tools.slice(0, 10).map(tool => (
                       <span key={tool} className="badge" style={{ fontSize: '11px' }}>
@@ -205,7 +207,7 @@ function MCP() {
                     ))}
                     {server.status.tools.length > 10 && (
                       <span className="badge" style={{ fontSize: '11px' }}>
-                        +{server.status.tools.length - 10} more
+                        {t('mcp.more', { count: server.status.tools.length - 10 })}
                       </span>
                     )}
                   </div>
@@ -220,10 +222,10 @@ function MCP() {
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2 style={{ marginBottom: '20px' }}>Add MCP Server</h2>
+            <h2 style={{ marginBottom: '20px' }}>{t('mcp.modal_title')}</h2>
             
             <div className="form-group">
-              <label>Name *</label>
+              <label>{t('mcp.name')}</label>
               <input
                 type="text"
                 placeholder="e.g. filesystem"
@@ -233,7 +235,7 @@ function MCP() {
             </div>
             
             <div className="form-group">
-              <label>URL *</label>
+              <label>{t('mcp.url')}</label>
               <input
                 type="text"
                 placeholder="e.g. http://mcp-server:3001"
@@ -243,10 +245,10 @@ function MCP() {
             </div>
             
             <div className="form-group">
-              <label>Description</label>
+              <label>{t('mcp.description')}</label>
               <input
                 type="text"
-                placeholder="Optional description"
+                placeholder=""
                 value={newServer.description}
                 onChange={e => setNewServer({ ...newServer, description: e.target.value })}
               />
@@ -254,10 +256,10 @@ function MCP() {
             
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
-                Cancel
+                {t('mcp.cancel')}
               </button>
               <button className="btn btn-primary" onClick={handleAdd}>
-                Add Server
+                {t('mcp.add_server')}
               </button>
             </div>
           </div>

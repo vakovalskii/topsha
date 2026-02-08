@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getSecurityPatterns, addSecurityPattern, deleteSecurityPattern } from '../api'
+import { useT } from '../i18n'
 
 function Security() {
+  const { t } = useT()
   const [patterns, setPatterns] = useState([])
   const [newPattern, setNewPattern] = useState('')
   const [loading, setLoading] = useState(true)
@@ -40,7 +42,7 @@ function Security() {
       await addSecurityPattern(newPattern)
       setPatterns([...patterns, newPattern])
       setNewPattern('')
-      setToast({ type: 'success', message: 'Pattern added' })
+      setToast({ type: 'success', message: t('toast.pattern_added') })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -48,12 +50,12 @@ function Security() {
   }
 
   async function handleDelete(pattern) {
-    if (!confirm(`Delete pattern: ${pattern}?`)) return
+    if (!confirm(t('confirm.delete_pattern', { pattern }))) return
     
     try {
       await deleteSecurityPattern(pattern)
       setPatterns(patterns.filter(p => p !== pattern))
-      setToast({ type: 'success', message: 'Pattern deleted' })
+      setToast({ type: 'success', message: t('toast.pattern_deleted') })
     } catch (e) {
       setToast({ type: 'error', message: e.message })
     }
@@ -65,20 +67,20 @@ function Security() {
   )
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Security Patterns</h1>
-        <p className="page-subtitle">Manage blocked command patterns ({patterns.length} total)</p>
+        <h1 className="page-title">{t('security.title')}</h1>
+        <p className="page-subtitle">{t('security.subtitle')} ({patterns.length})</p>
       </div>
 
       {/* Add new pattern */}
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">Add New Pattern</h2>
+          <h2 className="card-title">{t('security.add_pattern')}</h2>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <input
@@ -90,7 +92,7 @@ function Security() {
             onKeyPress={e => e.key === 'Enter' && handleAdd()}
           />
           <button className="btn btn-primary" onClick={handleAdd}>
-            ➕ Add
+            {t('security.add_btn')}
           </button>
         </div>
       </div>
@@ -98,11 +100,11 @@ function Security() {
       {/* Pattern list */}
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">Blocked Patterns</h2>
+          <h2 className="card-title">{t('security.blocked_patterns')}</h2>
           <input
             type="text"
             className="form-input"
-            placeholder="Filter..."
+            placeholder={t('security.filter')}
             style={{ width: '200px' }}
             value={filter}
             onChange={e => setFilter(e.target.value)}
@@ -112,7 +114,7 @@ function Security() {
         <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
           {filtered.length === 0 ? (
             <p style={{ color: 'var(--text-dim)', padding: '20px', textAlign: 'center' }}>
-              No patterns found
+              {t('security.no_patterns')}
             </p>
           ) : (
             filtered.map((pattern, i) => (

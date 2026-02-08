@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getStats, getHealth, getServices, fetchApi } from '../api'
+import { useT } from '../i18n'
 
 function Dashboard() {
+  const { t } = useT()
   const [stats, setStats] = useState(null)
   const [services, setServices] = useState([])
   const [systemMetrics, setSystemMetrics] = useState(null)
@@ -46,14 +48,14 @@ function Dashboard() {
   }
 
   if (loading) {
-    return <div className="loading"><div className="spinner"></div>Loading...</div>
+    return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-subtitle">System overview and status</p>
+        <h1 className="page-title">{t('dashboard.title')}</h1>
+        <p className="page-subtitle">{t('dashboard.subtitle')}</p>
       </div>
 
       {/* System Metrics */}
@@ -66,7 +68,7 @@ function Dashboard() {
             }}>
               {systemMetrics.cpu_percent?.toFixed(1) || 0}%
             </div>
-            <div className="stat-label">💻 CPU</div>
+            <div className="stat-label">{t('dashboard.cpu')}</div>
             <div style={{ marginTop: '8px', height: '4px', background: 'var(--bg-input)', borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{ 
                 width: `${systemMetrics.cpu_percent || 0}%`, 
@@ -84,7 +86,7 @@ function Dashboard() {
             }}>
               {systemMetrics.memory_percent?.toFixed(1) || 0}%
             </div>
-            <div className="stat-label">🧠 Memory</div>
+            <div className="stat-label">{t('dashboard.memory_label')}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
               {formatBytes(systemMetrics.memory_used)} / {formatBytes(systemMetrics.memory_total)}
             </div>
@@ -105,7 +107,7 @@ function Dashboard() {
             }}>
               {systemMetrics.disk_percent?.toFixed(1) || 0}%
             </div>
-            <div className="stat-label">💾 Disk</div>
+            <div className="stat-label">{t('dashboard.disk')}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
               {formatBytes(systemMetrics.disk_used)} / {formatBytes(systemMetrics.disk_total)}
             </div>
@@ -123,7 +125,7 @@ function Dashboard() {
             <div className="stat-value" style={{ fontSize: '24px', color: 'var(--accent)' }}>
               ↓{formatSpeed(systemMetrics.network_recv_rate)}
             </div>
-            <div className="stat-label">🌐 Network</div>
+            <div className="stat-label">{t('dashboard.network')}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
               ↑{formatSpeed(systemMetrics.network_sent_rate)}
             </div>
@@ -135,34 +137,34 @@ function Dashboard() {
       <div className="grid grid-4">
         <div className="card stat">
           <div className="stat-value">{stats?.active_users || 0}</div>
-          <div className="stat-label">Active Users</div>
+          <div className="stat-label">{t('dashboard.active_users')}</div>
         </div>
         <div className="card stat">
           <div className="stat-value">{stats?.active_sandboxes || 0}</div>
-          <div className="stat-label">Active Sandboxes</div>
+          <div className="stat-label">{t('dashboard.active_sandboxes')}</div>
         </div>
         <div className="card stat">
           <div className="stat-value">{stats?.requests_today || 0}</div>
-          <div className="stat-label">Requests Today</div>
+          <div className="stat-label">{t('dashboard.requests_today')}</div>
         </div>
         <div className="card stat">
           <div className="stat-value">{stats?.tools_executed || 0}</div>
-          <div className="stat-label">Tools Executed</div>
+          <div className="stat-label">{t('dashboard.tools_executed')}</div>
         </div>
       </div>
 
       {/* Services Status */}
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">Services</h2>
+          <h2 className="card-title">{t('dashboard.services_table')}</h2>
         </div>
         <table className="table">
           <thead>
             <tr>
-              <th>Service</th>
-              <th>Status</th>
-              <th>Uptime</th>
-              <th>Memory</th>
+              <th>{t('dashboard.col_service')}</th>
+              <th>{t('dashboard.col_status')}</th>
+              <th>{t('dashboard.col_uptime')}</th>
+              <th>{t('dashboard.col_memory')}</th>
             </tr>
           </thead>
           <tbody>
@@ -187,7 +189,7 @@ function Dashboard() {
       <div className="grid grid-2">
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title">Recent Requests</h2>
+            <h2 className="card-title">{t('dashboard.recent_requests')}</h2>
           </div>
           <div style={{ color: 'var(--text-dim)', fontSize: '14px' }}>
             {stats?.recent_requests?.length > 0 ? (
@@ -197,14 +199,14 @@ function Dashboard() {
                 </div>
               ))
             ) : (
-              <p>No recent activity</p>
+              <p>{t('dashboard.no_activity')}</p>
             )}
           </div>
         </div>
         
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title">Security Events</h2>
+            <h2 className="card-title">{t('dashboard.security_events')}</h2>
           </div>
           <div style={{ color: 'var(--text-dim)', fontSize: '14px' }}>
             {stats?.security_events?.length > 0 ? (
@@ -214,7 +216,7 @@ function Dashboard() {
                 </div>
               ))
             ) : (
-              <p style={{ color: 'var(--success)' }}>✓ No security events</p>
+              <p style={{ color: 'var(--success)' }}>{t('dashboard.no_security')}</p>
             )}
           </div>
         </div>
