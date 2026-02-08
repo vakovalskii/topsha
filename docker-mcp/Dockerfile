@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir fastapi uvicorn docker
 
+COPY tools/ ./tools/
 COPY main.py .
 
 EXPOSE 8300
