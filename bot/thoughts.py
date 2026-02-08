@@ -7,7 +7,7 @@ import aiohttp
 from datetime import datetime
 from typing import Optional
 
-from config import CONFIG, PROXY_URL, MODEL
+from config import CONFIG, PROXY_URL, MODEL, CORE_URL
 from state import bot
 
 logger = logging.getLogger("bot.thoughts")
@@ -19,12 +19,28 @@ active_chats: dict[int, float] = {}
 # Track last thought time per chat
 last_thought_time: dict[int, float] = {}
 
-# Thoughts config
-THOUGHTS_ENABLED = True
+# Thoughts config (defaults, can be overridden by admin config)
 MIN_INTERVAL_MINUTES = 10
 MAX_INTERVAL_MINUTES = 30
 START_DELAY_MINUTES = 5
 ACTIVITY_TIMEOUT_MINUTES = 60  # Consider chat inactive after this
+
+
+async def is_thoughts_enabled() -> bool:
+    """Check if thoughts are enabled in admin config"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{CORE_URL}/api/admin/config",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    config = await resp.json()
+                    enabled = config.get("bot", {}).get("thoughts_enabled", True)
+                    return enabled
+    except Exception as e:
+        logger.debug(f"Could not fetch config, defaulting to enabled: {e}")
+    return True  # Default to enabled if can't fetch config
 
 
 def mark_chat_active(chat_id: int):
@@ -94,10 +110,6 @@ async def send_thought(chat_id: int, thought: str):
 
 async def thoughts_loop():
     """Main thoughts loop"""
-    if not THOUGHTS_ENABLED:
-        logger.info("Thoughts disabled")
-        return
-    
     logger.info("Thoughts loop started")
     
     # Initial delay
@@ -108,6 +120,11 @@ async def thoughts_loop():
             # Random interval between thoughts
             interval = random.randint(MIN_INTERVAL_MINUTES, MAX_INTERVAL_MINUTES) * 60
             await asyncio.sleep(interval)
+            
+            # Check if thoughts are enabled (from admin config)
+            if not await is_thoughts_enabled():
+                logger.debug("Thoughts disabled in config, skipping")
+                continue
             
             # Get active chats
             chats = get_active_chats()

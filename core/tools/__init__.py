@@ -372,7 +372,8 @@ async def tool_load_tools(args: dict, ctx: ToolContext) -> ToolResult:
             output = f"✅ Loaded {len(loaded)} tools: {', '.join(loaded_names)}"
             if not_found:
                 output += f"\n⚠️ Not found: {', '.join(not_found)}"
-            return ToolResult(True, output=output, metadata={"loaded_tools": loaded})
+            output += "\n\n💡 MCP tools are already available - just call them directly!"
+            return ToolResult(True, output=output)
         else:
             return ToolResult(False, error=f"No tools loaded. Not found: {', '.join(not_found)}")
     except Exception as e:
