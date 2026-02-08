@@ -12,7 +12,8 @@ from aiogram.enums import ChatType
 
 from config import (
     CONFIG, CORE_URL, MODEL, ADMIN_USER_ID,
-    USERBOT_ID, MAX_BOT_REPLIES, BOT_COOLDOWN
+    USERBOT_ID, MAX_BOT_REPLIES, BOT_COOLDOWN,
+    ASR_URL, ASR_MAX_DURATION
 )
 from state import (
     bot, dp, bot_username, bot_id,
@@ -26,6 +27,7 @@ from security import detect_prompt_injection
 from api import call_core, clear_session
 from thoughts import mark_chat_active
 from access import access_control, check_user_access
+from i18n import t
 
 
 def _message_mentions_bot(message: Message, bot_id: int, bot_username: str) -> bool:
@@ -96,37 +98,29 @@ async def set_reaction(chat_id: int, message_id: int, emoji: str):
 async def cmd_start(message: Message):
     from state import bot_username
     chat_type = message.chat.type
-    group_hint = f"💬 In groups: @{bot_username} or reply\n\n" if chat_type != ChatType.PRIVATE else ""
-    await message.reply(
-        f"<b>🤖 Coding Agent</b>\n\n"
-        f"{group_hint}"
-        f"/clear - Reset session\n/status - Status"
-    )
+    group_hint = t("cmd_start_group_hint", bot_username=bot_username) if chat_type != ChatType.PRIVATE else ""
+    await message.reply(t("cmd_start", group_hint=group_hint))
 
 
 @dp.message(Command("clear"))
 async def cmd_clear(message: Message):
     user_id = message.from_user.id
     if await clear_session(user_id):
-        await message.reply("🗑 Session cleared")
+        await message.reply(t("cmd_clear_ok"))
     else:
-        await message.reply("❌ Failed to clear session")
+        await message.reply(t("cmd_clear_fail"))
 
 
 @dp.message(Command("status"))
 async def cmd_status(message: Message):
-    await message.reply(
-        f"<b>📊 Status</b>\n"
-        f"Model: <code>{MODEL}</code>\n"
-        f"Core: <code>{CORE_URL}</code>"
-    )
+    await message.reply(t("cmd_status", model=MODEL, core_url=CORE_URL))
 
 
 @dp.message(Command("afk"))
 async def cmd_afk(message: Message):
     user_id = message.from_user.id
     if user_id != ADMIN_USER_ID:
-        await message.reply("Только хозяин может меня отправить по делам 😏")
+        await message.reply(t("cmd_afk_only_owner"))
         return
     
     args = message.text.split()[1:] if message.text else []
@@ -135,12 +129,12 @@ async def cmd_afk(message: Message):
     
     if minutes <= 0:
         clear_afk()
-        await message.reply("Я вернулся! 🎉")
+        await message.reply(t("cmd_afk_back"))
         return
     
     minutes = min(minutes, CONFIG.afk_max_minutes)
     set_afk(minutes, reason)
-    await message.reply(f"Ладно, {reason}. Буду через {minutes} мин ✌️")
+    await message.reply(t("cmd_afk_set", reason=reason, minutes=minutes))
 
 
 # ============ ACCESS CONTROL COMMANDS ============
@@ -222,6 +216,156 @@ async def cmd_allow(message: Message):
     
     success, msg = access_control.add_to_allowlist(int(args[0]), user_id)
     await message.reply(msg)
+
+
+# ============ VOICE HANDLER ============
+
+@dp.message(F.voice)
+async def handle_voice(message: Message):
+    """Handle voice messages - transcribe and process as text"""
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+    
+    # Check ASR configured
+    if not ASR_URL:
+        return
+    
+    # AFK
+    if is_afk():
+        await set_reaction(message.chat.id, message.message_id, "💤")
+        return
+    
+    chat_type = message.chat.type
+    chat_id = message.chat.id
+    message_id = message.message_id
+    is_private = chat_type == ChatType.PRIVATE
+    is_group = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)
+    
+    # In groups, only respond to voice if it's a reply to bot
+    if is_group:
+        reply = message.reply_to_message
+        reply_to_bot = reply and (reply.from_user.id == bot_id or reply.from_user.username == bot_username)
+        if not reply_to_bot:
+            return
+    
+    # Access control
+    chat_type_str = chat_type.value if hasattr(chat_type, 'value') else str(chat_type)
+    access_result = check_user_access(user_id, chat_type_str)
+    if not access_result.allowed:
+        if is_private:
+            await rate_limiter.safe_send(chat_id, message.reply(access_result.reason))
+        return
+    
+    voice = message.voice
+    if voice.duration > ASR_MAX_DURATION:
+        await rate_limiter.safe_send(
+            chat_id,
+            message.reply(t("voice_too_long", duration=voice.duration, max=ASR_MAX_DURATION))
+        )
+        return
+    
+    # Concurrent check
+    if not rate_limiter.can_accept_user(user_id):
+        await set_reaction(chat_id, message_id, "🤔")
+        await rate_limiter.safe_send(chat_id, message.reply(t("voice_busy")))
+        return
+    
+    username = message.from_user.username or message.from_user.first_name or str(user_id)
+    print(f"\n[IN] @{username} ({user_id}): [voice {voice.duration}s]\n")
+    
+    # React to show processing
+    await set_reaction(chat_id, message_id, "👀")
+    
+    # Transcribe
+    try:
+        await bot.send_chat_action(chat_id, "typing")
+        file_info = await bot.get_file(voice.file_id)
+        file_url = f"https://api.telegram.org/file/bot{bot.token}/{file_info.file_path}"
+        
+        from voice import transcribe_voice
+        transcribed_text = await transcribe_voice(file_url, voice.duration)
+    except Exception as e:
+        print(f"[voice] Transcription error: {e}")
+        await rate_limiter.safe_send(
+            chat_id,
+            message.reply(t("voice_transcribe_fail", error=str(e)[:100]))
+        )
+        return
+    
+    if not transcribed_text.strip():
+        await rate_limiter.safe_send(chat_id, message.reply(t("voice_empty")))
+        return
+    
+    # Show transcribed text
+    from formatters import md_to_html
+    preview = transcribed_text[:200] + ("..." if len(transcribed_text) > 200 else "")
+    await rate_limiter.safe_send(
+        chat_id,
+        message.reply(f"🎤 <i>{preview}</i>")
+    )
+    
+    # Process as regular text through agent
+    message_for_agent = f"[От: @{username} ({user_id})]\n[{t('voice_prefix')}]\n{transcribed_text}"
+    
+    mark_chat_active(chat_id)
+    rate_limiter.mark_active(user_id)
+    
+    async with rate_limiter.get_user_lock(user_id):
+        typing_task = None
+        try:
+            async def typing_loop():
+                while True:
+                    try:
+                        await bot.send_chat_action(chat_id, "typing")
+                    except:
+                        pass
+                    await asyncio.sleep(CONFIG.typing_interval)
+            
+            typing_task = asyncio.create_task(typing_loop())
+            
+            chat_type_str = chat_type.value if hasattr(chat_type, 'value') else str(chat_type)
+            core_result = await call_core(user_id, chat_id, message_for_agent, username, chat_type_str)
+            
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+            
+            if core_result.disabled or core_result.access_denied:
+                return
+            
+            await set_reaction(chat_id, message_id, get_random_done_emoji())
+            
+            final_response = core_result.response or t("no_response")
+            final_response = clean_model_artifacts(final_response)
+            print(f"[OUT] → @{username}:\n{final_response[:200]}\n")
+            
+            html_response = md_to_html(final_response)
+            parts = split_message(html_response, CONFIG.max_length)
+            
+            for i, part in enumerate(parts):
+                sent = await rate_limiter.safe_send(
+                    chat_id,
+                    message.reply(part) if i == 0 else bot.send_message(chat_id, part)
+                )
+                if not sent and i == 0:
+                    plain = re.sub(r'<[^>]+>', '', part)[:4000]
+                    await rate_limiter.safe_send(chat_id, message.reply(plain))
+                    break
+        
+        except Exception as e:
+            if typing_task:
+                typing_task.cancel()
+            print(f"[voice] Error: {e}")
+            traceback.print_exc()
+            await set_reaction(chat_id, message_id, "👎")
+            await rate_limiter.safe_send(chat_id, message.reply(t("error", error=str(e)[:200])))
+        
+        finally:
+            rate_limiter.mark_inactive(user_id)
 
 
 # ============ MESSAGE HANDLER ============
@@ -319,7 +463,7 @@ async def handle_message(message: Message):
         await set_reaction(chat_id, message_id, "🤔")
         await rate_limiter.safe_send(
             chat_id,
-            message.reply("⏳ Сервер занят, попробуй через минуту")
+            message.reply(t("busy"))
         )
         return
     
@@ -332,7 +476,7 @@ async def handle_message(message: Message):
     if detect_prompt_injection(text):
         print(f"[SECURITY] Prompt injection from {user_id}")
         await set_reaction(chat_id, message_id, "🤨")
-        await rate_limiter.safe_send(chat_id, message.reply("Хорошая попытка 😏"))
+        await rate_limiter.safe_send(chat_id, message.reply(t("injection")))
         return
     
     # React with 👀
@@ -385,7 +529,7 @@ async def handle_message(message: Message):
             await set_reaction(chat_id, message_id, get_random_done_emoji())
             
             # Send response
-            final_response = core_result.response or "(no response)"
+            final_response = core_result.response or t("no_response")
             final_response = clean_model_artifacts(final_response)
             print(f"[OUT] → @{username}:\n{final_response[:200]}\n")
             
@@ -412,7 +556,7 @@ async def handle_message(message: Message):
             print(f"[bot] Error: {e}")
             traceback.print_exc()
             await set_reaction(chat_id, message_id, "👎")
-            await rate_limiter.safe_send(chat_id, message.reply(f"❌ Error: {str(e)[:200]}"))
+            await rate_limiter.safe_send(chat_id, message.reply(t("error", error=str(e)[:200])))
         
         finally:
             rate_limiter.mark_inactive(user_id)
