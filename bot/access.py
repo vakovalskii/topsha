@@ -19,7 +19,7 @@ import logging
 
 logger = logging.getLogger("bot.access")
 
-# Access mode from env
+# Access mode from env (fallback)
 ACCESS_MODE = os.getenv("ACCESS_MODE", "admin")  # admin, allowlist, public, pairing
 ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 
@@ -28,9 +28,23 @@ _allowed_env = os.getenv("ALLOWED_USERS", "")
 ALLOWED_USERS = set(int(x.strip()) for x in _allowed_env.split(",") if x.strip().isdigit())
 ALLOWED_USERS.add(ADMIN_USER_ID)  # Admin always allowed
 
+# Shared config file (written by admin UI via core)
+CONFIG_FILE = Path("/data/admin_config.json") if os.path.exists("/data") else Path(__file__).parent / "admin_config.json"
+
 # Pairing storage
 PAIRING_FILE = Path("/data/pairing.json") if os.path.exists("/data") else Path(__file__).parent / "pairing.json"
 PAIRING_TTL = 300  # 5 minutes for pairing code
+
+
+def _load_access_config() -> dict:
+    """Load access config from shared config file (written by admin UI)"""
+    if CONFIG_FILE.exists():
+        try:
+            data = json.loads(CONFIG_FILE.read_text())
+            return data.get("access", {})
+        except Exception as e:
+            logger.error(f"Failed to load config from {CONFIG_FILE}: {e}")
+    return {}
 
 
 @dataclass
@@ -72,21 +86,48 @@ class AccessControl:
         except Exception as e:
             logger.error(f"Failed to save approved users: {e}")
     
+    def _reload_from_config(self):
+        """Reload admin_id, mode, and allowlist from shared config file"""
+        access = _load_access_config()
+        if access:
+            new_admin_id = access.get("admin_id")
+            if new_admin_id and isinstance(new_admin_id, int) and new_admin_id > 0:
+                if new_admin_id != self.admin_id:
+                    logger.info(f"Admin ID updated from config: {self.admin_id} -> {new_admin_id}")
+                    self.admin_id = new_admin_id
+
+            # Map core mode names to bot mode names (admin_only -> admin)
+            new_mode = access.get("mode")
+            if new_mode:
+                if new_mode == "admin_only":
+                    new_mode = "admin"
+                if new_mode != self.mode:
+                    logger.info(f"Access mode updated from config: {self.mode} -> {new_mode}")
+                    self.mode = new_mode
+
+            new_allowlist = access.get("allowlist")
+            if isinstance(new_allowlist, list):
+                self.allowlist = set(new_allowlist)
+                self.allowlist.add(self.admin_id)
+
     def check_access(self, user_id: int, chat_type: str = "private") -> AccessResult:
         """Check if user has access
-        
+
         Returns AccessResult with:
         - allowed: True if user can proceed
         - reason: Human-readable reason
         - pairing_code: Code for pairing mode (if applicable)
         - is_admin: True if user is admin
         """
+        # Reload config from file (admin UI may have changed it)
+        self._reload_from_config()
+
         is_admin = user_id == self.admin_id
-        
+
         # Admin always has access
         if is_admin:
             return AccessResult(allowed=True, reason="admin", is_admin=True)
-        
+
         # Mode: admin only
         if self.mode == "admin":
             return AccessResult(
