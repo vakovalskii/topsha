@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from ..tools import SHARED_TOOLS, BOT_ONLY_TOOLS
+from ..tools import get_all_tools as get_builtin_tools, BOT_ONLY_TOOLS
 from ..mcp import mcp_cache
 from ..skills import skills_manager
 from ..config import load_config, save_config, get_all_tools_with_state
@@ -13,9 +13,10 @@ router = APIRouter(tags=["tools"])
 
 
 @router.get("/tools")
-async def get_all_tools(user_id: Optional[str] = None):
+async def list_all_tools(user_id: Optional[str] = None):
     """Get all tools with their definitions and state"""
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, user_id)
+    shared_tools = get_builtin_tools()
+    tools = get_all_tools_with_state(shared_tools, mcp_cache, skills_manager, user_id)
     
     builtin_count = len([t for t in tools.values() if t.get("source") == "builtin"])
     mcp_count = len([t for t in tools.values() if t.get("source", "").startswith("mcp:")])
@@ -40,7 +41,7 @@ async def get_enabled_tools(user_id: Optional[str] = None):
     Pass user_id to include user-specific skills from their workspace.
     Tools are refreshed on each call to pick up new skills.
     """
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, user_id)
+    tools = get_all_tools_with_state(get_builtin_tools(), mcp_cache, skills_manager, user_id)
     enabled = []
     
     for tool in tools.values():
@@ -66,7 +67,7 @@ async def search_tools(query: str = "", source: str = "all", limit: int = 10):
     - Name contains query: +50
     - Description contains query: +10
     """
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, None)
+    tools = get_all_tools_with_state(get_builtin_tools(), mcp_cache, skills_manager, None)
     results = []
     
     query_lower = query.lower().strip()
@@ -158,7 +159,7 @@ async def get_base_tools():
         "telegram_history", "telegram_join"
     ]
     
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, None)
+    tools = get_all_tools_with_state(get_builtin_tools(), mcp_cache, skills_manager, None)
     base_tools = []
     
     for name in BASE_TOOL_NAMES:
@@ -183,7 +184,7 @@ async def load_toolkit(names: list[str]):
     Agent calls this after search_tools to get full definitions
     of tools it wants to use.
     """
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, None)
+    tools = get_all_tools_with_state(get_builtin_tools(), mcp_cache, skills_manager, None)
     loaded = []
     not_found = []
     
@@ -211,7 +212,7 @@ async def load_toolkit(names: list[str]):
 @router.get("/tools/{name}")
 async def get_tool(name: str):
     """Get specific tool definition"""
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, None)
+    tools = get_all_tools_with_state(get_builtin_tools(), mcp_cache, skills_manager, None)
     if name in tools:
         return tools[name]
     raise HTTPException(404, f"Tool {name} not found")
@@ -224,7 +225,7 @@ class ToolToggle(BaseModel):
 @router.put("/tools/{name}")
 async def toggle_tool(name: str, data: ToolToggle):
     """Enable or disable a tool"""
-    tools = get_all_tools_with_state(SHARED_TOOLS, mcp_cache, skills_manager, None)
+    tools = get_all_tools_with_state(get_builtin_tools(), mcp_cache, skills_manager, None)
     
     if name not in tools:
         raise HTTPException(404, f"Tool {name} not found")
