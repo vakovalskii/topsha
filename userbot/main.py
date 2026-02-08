@@ -61,16 +61,8 @@ OWNER_IDS = set(int(x.strip()) for x in _owner_ids_raw.split(',') if x.strip().i
 # NOTE: Access control (allowlist, public, admin_only) is managed via admin panel
 # Old OWNER_ONLY and WHITELIST removed - single source of truth in core API
 
-# ============ SYSTEM PROMPT ============
-def load_system_prompt() -> str:
-    """Load userbot's system prompt"""
-    prompt_file = os.path.join(os.path.dirname(__file__), 'system.txt')
-    if os.path.exists(prompt_file):
-        with open(prompt_file) as f:
-            return f.read()
-    return ""
-
-SYSTEM_PROMPT_TEMPLATE = load_system_prompt()
+# NOTE: System prompt is now managed centrally in core/src/agent/system.txt
+# Userbot no longer has its own prompt - edit via admin panel
 
 # ============ STATE ============
 last_response_time = {}  # chat_id -> timestamp
@@ -180,13 +172,6 @@ async def call_agent(
 ) -> AgentResponse:
     """Call gateway API to get agent response"""
     try:
-        # Build system prompt with context
-        system_prompt = SYSTEM_PROMPT_TEMPLATE
-        if system_prompt:
-            system_prompt = system_prompt.replace('{chat_id}', str(chat_id))
-            system_prompt = system_prompt.replace('{username}', username)
-            system_prompt = system_prompt.replace('{chat_type}', chat_type)
-        
         async with aiohttp.ClientSession() as session:
             payload = {
                 "user_id": user_id,
@@ -196,10 +181,6 @@ async def call_agent(
                 "source": "userbot",
                 "chat_type": chat_type,
             }
-            
-            # Add system prompt if available
-            if system_prompt:
-                payload["system_prompt"] = system_prompt
             
             async with session.post(
                 f"{CORE_URL}/api/chat",

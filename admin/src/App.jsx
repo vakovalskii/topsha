@@ -9,6 +9,7 @@ import Tools from './pages/Tools'
 import MCP from './pages/MCP'
 import Skills from './pages/Skills'
 import Tasks from './pages/Tasks'
+import Prompt from './pages/Prompt'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <NavLink to="/" end>📊 Dashboard</NavLink>
           <NavLink to="/services">🐳 Services</NavLink>
           <NavLink to="/config">⚙️ Config</NavLink>
+          <NavLink to="/prompt">📝 Prompt</NavLink>
           <NavLink to="/security">🛡️ Security</NavLink>
           <NavLink to="/tools">🔧 Tools</NavLink>
           <NavLink to="/mcp">🔌 MCP</NavLink>
@@ -38,6 +40,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/services" element={<Services />} />
           <Route path="/config" element={<Config />} />
+          <Route path="/prompt" element={<Prompt />} />
           <Route path="/security" element={<Security />} />
           <Route path="/tools" element={<Tools />} />
           <Route path="/mcp" element={<MCP />} />

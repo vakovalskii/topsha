@@ -119,3 +119,39 @@ export const installSkill = (name) => fetchApi('/skills/install', {
   body: JSON.stringify({ name, source: 'anthropic' })
 })
 export const uninstallSkill = (name) => fetchApi(`/skills/${name}`, { method: 'DELETE' })
+
+// System Prompt
+export const getPrompt = () => fetchApi('/prompt')
+export const updatePrompt = (content) => fetchApi('/prompt', {
+  method: 'PUT',
+  body: JSON.stringify({ content })
+})
+export const restorePrompt = () => fetchApi('/prompt/restore', { method: 'POST' })
+
+// Export all as object for convenient imports
+export const api = {
+  // Dashboard
+  getStats, getHealth,
+  // Services
+  getServices, getServiceStats, restartService, stopService, startService,
+  // Config
+  getConfig, updateConfig,
+  // Security
+  getSecurityPatterns, addSecurityPattern, deleteSecurityPattern,
+  // Tools
+  getTools, toggleTool,
+  // Users
+  getUsers, getSandboxes, killSandbox,
+  // Logs
+  getLogs,
+  // Access
+  getAccess, toggleBot, toggleUserbot, setAccessMode, setAdminId, getAllowlist, updateAllowlist,
+  // Sessions
+  getSessions, getSessionDetail, clearSession,
+  // MCP
+  getMcpServers, addMcpServer, removeMcpServer, toggleMcpServer, refreshMcpServer, refreshAllMcp,
+  // Skills
+  getSkills, getAvailableSkills, toggleSkill, scanSkills, installSkill, uninstallSkill,
+  // Prompt
+  getPrompt, updatePrompt, restorePrompt
+}

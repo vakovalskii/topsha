@@ -504,18 +504,8 @@ async def run_agent(
                 
                 agent_logger.info(f"[iter {iteration}] TOOL RESULT: success={tool_result.success}, output={len(tool_result.output or '')} chars, error={tool_result.error or 'none'}")
                 
-                # Handle dynamic tool loading
-                if name == "load_tools" and tool_result.success and tool_result.metadata:
-                    loaded = tool_result.metadata.get("loaded_tools", [])
-                    if loaded:
-                        # Add newly loaded tools to available definitions
-                        for new_tool in loaded:
-                            tool_name = new_tool.get("function", {}).get("name")
-                            # Avoid duplicates
-                            if tool_name and not any(t.get("function", {}).get("name") == tool_name for t in tool_definitions):
-                                tool_definitions.append(new_tool)
-                                dynamic_tools.append(tool_name)
-                                agent_logger.info(f"[iter {iteration}] Dynamically loaded tool: {tool_name}")
+                # Handle dynamic tool loading - MCP tools are called directly, no need to load
+                # The execute_tool function handles mcp_* tools automatically
                 
                 # Track blocked commands
                 if not tool_result.success and "BLOCKED" in (tool_result.error or ""):
