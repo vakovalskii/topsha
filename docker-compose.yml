@@ -99,7 +99,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /home/ubuntu/LocalTopSH:/workspace:ro  # Access to compose files
+      - ${PWD}:/workspace:ro  # Access to compose files (uses current directory)
     networks:
       - agent-net
     healthcheck:
@@ -253,7 +253,7 @@ services:
     container_name: admin
     restart: unless-stopped
     ports:
-      - "3000:3000"  # Protected by Basic Auth
+      - "${ADMIN_PORT:-3000}:3000"  # Protected by Basic Auth (change via ADMIN_PORT env)
     environment:
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASSWORD_FILE=/run/secrets/admin_password
