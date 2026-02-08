@@ -9,7 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy code
 COPY main.py .
-COPY system.txt .
 
 # Create session directory
 RUN mkdir -p session
