@@ -67,8 +67,8 @@ class SessionManager:
 sessions = SessionManager()
 
 
-def load_system_prompt() -> str:
-    """Load system prompt from file"""
+def load_system_prompt_template() -> str:
+    """Load system prompt template from file"""
     prompt_file = Path(__file__).parent / "src" / "agent" / "system.txt"
     if prompt_file.exists():
         return prompt_file.read_text()
@@ -84,6 +84,26 @@ You can:
 
 Always be helpful and concise. Think step by step when solving complex problems.
 """
+
+
+def format_system_prompt(
+    template: str,
+    cwd: str,
+    tools_list: str,
+    user_ports: str,
+    skills_list: str = ""
+) -> str:
+    """Replace placeholders in system prompt template"""
+    from datetime import datetime
+    
+    prompt = template
+    prompt = prompt.replace("{{cwd}}", cwd)
+    prompt = prompt.replace("{{date}}", datetime.now().strftime("%Y-%m-%d %H:%M"))
+    prompt = prompt.replace("{{tools}}", tools_list)
+    prompt = prompt.replace("{{userPorts}}", user_ports)
+    prompt = prompt.replace("{{skills}}", skills_list)
+    
+    return prompt
 
 
 async def load_skill_mentions(user_id: str = None) -> str:
@@ -395,16 +415,38 @@ async def run_agent(
     agent_logger.info(f"Agent run: user={user_id}, chat={chat_id}, source={source}")
     agent_logger.info(f"Message: {message[:100]}...")
     
-    # Build system message
-    system_prompt = load_system_prompt()
+    # Get tool definitions FIRST (needed for system prompt)
+    use_lazy_loading = os.getenv("LAZY_TOOL_LOADING", "true").lower() == "true"
+    tool_definitions = await get_tool_definitions(source, lazy_loading=use_lazy_loading)
+    tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source)
     
-    # Add skill mentions (name + description only, agent loads full instructions on-demand)
+    # Format tools list for prompt
+    tools_list = "\n".join([
+        f"- {t['function']['name']}: {t['function'].get('description', '')[:100]}"
+        for t in tool_definitions
+    ])
+    
+    # Load skill mentions
     skill_mentions = await load_skill_mentions(str(user_id))
     
+    # Get user ports
+    user_ports = f"{4010 + (user_id % 1000)}-{4010 + (user_id % 1000) + 9}"
+    
+    # Build system prompt with placeholders replaced
+    system_template = load_system_prompt_template()
+    system_prompt = format_system_prompt(
+        template=system_template,
+        cwd=session.cwd,
+        tools_list=tools_list,
+        user_ports=user_ports,
+        skills_list=skill_mentions
+    )
+    
+    # Add workspace info
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     workspace_info = f"\nUser: @{username} (id={user_id})\nWorkspace: {session.cwd}\nTime: {timestamp}\nSource: {source}"
     
-    messages = [{"role": "system", "content": system_prompt + skill_mentions + workspace_info}]
+    messages = [{"role": "system", "content": system_prompt + workspace_info}]
     messages.extend(session.history)
     messages.append({"role": "user", "content": message})
     
@@ -422,15 +464,6 @@ async def run_agent(
     
     final_response = ""
     iteration = 0
-    
-    # Get tool definitions from API (filtered by source)
-    # Use lazy loading by default - agent gets base tools + search_tools
-    # Agent can discover and load more tools dynamically
-    use_lazy_loading = os.getenv("LAZY_TOOL_LOADING", "true").lower() == "true"
-    tool_definitions = await get_tool_definitions(source, lazy_loading=use_lazy_loading)
-    
-    # Filter tools based on session type permissions
-    tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source)
     
     # Track dynamically loaded tools for this session
     dynamic_tools = []
