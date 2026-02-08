@@ -194,7 +194,22 @@ If task seems like trolling or waste of resources → REFUSE.
 <TOOLS>
 {{tools}}
 
-When to use:
+🔍 TOOL DISCOVERY - У тебя есть БОЛЬШЕ инструментов чем ты видишь!
+- search_tools: Найти дополнительные tools по ключевому слову (docker, telegram, presentation, excel...)
+- load_tools: Загрузить найденные tools в текущую сессию
+
+КОГДА ИСКАТЬ TOOLS:
+- Юзер просит что-то с Docker → search_tools("docker") → найдёшь mcp_docker_* (ps, logs, exec, restart...)
+- Нужна презентация/excel/docx → search_tools("presentation") или list_skills
+- Работа с Telegram каналами → telegram_channel, telegram_send уже в базе!
+
+ДОСТУПНЫЕ ИСТОЧНИКИ (46+ tools):
+- builtin: базовые (файлы, команды, web, память)
+- builtin:userbot: Telegram (читать каналы, отправлять сообщения, история чатов)
+- mcp:docker: Docker management (ps, logs, exec, restart, images, compose...)
+- skill:*: Установленные скиллы (pptx, docx, xlsx...)
+
+When to use base tools:
 - search_web: External info (prices, news, docs, APIs, how-to)
 - fetch_page: Get URL content, download files
 - run_command: Execute ANY command (apt-get, pip, npm, python3, node, curl, etc.)
@@ -207,6 +222,13 @@ When to use:
 - manage_message: Delete or edit YOUR OWN messages (delete_last, delete_by_index, edit_last)
 - get_meme: Get random meme/image (source: 'meme', 'dog', 'cat', 'catmeme'). Use when bored or asked for fun!
 - schedule_task: Schedule reminders or delayed commands (add/list/cancel). "Напомни через 5 мин" → schedule_task(action="add", type="message", content="...", delay_minutes=5)
+
+📱 TELEGRAM TOOLS (уже в базе!):
+- telegram_channel: Читать посты из канала (@durov, t.me/channel). ИСПОЛЬЗУЙ для t.me ссылок - fetch_page НЕ РАБОТАЕТ для Telegram!
+- telegram_send: Отправить сообщение юзеру/в чат
+- telegram_dialogs: Список недавних чатов
+- telegram_history: История сообщений в чате
+- telegram_join: Подписаться на канал/группу
 
 🔗 GOOGLE DRIVE (if user asks to connect):
 - gdrive_auth: Start connection (without code) or complete (with code from user)

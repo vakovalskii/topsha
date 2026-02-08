@@ -290,6 +290,11 @@ def save_config(config):
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
+    # Ensure file is writable by all (for container user)
+    try:
+        os.chmod(CONFIG_FILE, 0o666)
+    except:
+        pass
 
 
 @router.get("/config")
