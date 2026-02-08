@@ -36,7 +36,7 @@ TOOLS = {
     "manage_tasks": {
         "enabled": True,
         "name": "manage_tasks",
-        "description": "Todo list for planning complex tasks.",
+        "description": "INTERNAL todo list for agent's own planning. NOT for user requests! NOT for periodic/scheduled tasks! Use schedule_task for 'every X minutes' requests.",
         "source": "builtin",
         "parameters": {
             "type": "object",
@@ -53,7 +53,7 @@ TOOLS = {
     "schedule_task": {
         "enabled": True,
         "name": "schedule_task",
-        "description": "Schedule recurring or delayed tasks. IMPORTANT: 'content' is a TEXT PROMPT (not code!) that will be sent to the agent. Example: content='Найди курс доллара и отправь в ЛС'. The agent will execute this prompt with all its tools.",
+        "description": "🔔 PERIODIC TASKS! Use for 'every X minutes', 'check regularly', 'monitor'. Set type='agent' for automated actions (search_web, etc). Content is a NATURAL LANGUAGE prompt that agent will execute.",
         "source": "builtin",
         "parameters": {
             "type": "object",

@@ -151,7 +151,7 @@ async def get_base_tools():
     BASE_TOOL_NAMES = [
         "run_command", "read_file", "write_file", "edit_file",
         "list_directory", "search_files", "search_text",
-        "memory", "manage_tasks", 
+        "memory", "manage_tasks", "schedule_task",  # schedule_task for periodic tasks!
         "search_tools", "load_tools",  # Tool discovery
         # Web and Telegram
         "search_web", "fetch_page",
