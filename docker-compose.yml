@@ -104,22 +104,14 @@ services:
     container_name: google-workspace-mcp
     restart: unless-stopped
     ports:
-      - "${GOOGLE_MCP_PORT:-8500}:8500"  # For OAuth callback
+      - "${GOOGLE_MCP_PORT:-8500}:8500"  # For OAuth callback (not used, auth via Admin UI)
     environment:
       - TZ=${TZ:-Europe/Moscow}
-      - GOOGLE_OAUTH_CLIENT_ID_FILE=/run/secrets/gdrive_client_id
-      - GOOGLE_OAUTH_CLIENT_SECRET_FILE=/run/secrets/gdrive_client_secret
       - GOOGLE_MCP_CREDENTIALS_DIR=/app/store_creds
       - OAUTHLIB_INSECURE_TRANSPORT=1
       - PORT=8500
       - TOOL_TIER=core
-      # External URL for OAuth callback (set this to your public URL)
-      # OAuth handled via Admin UI (localhost redirect)
-      # - WORKSPACE_EXTERNAL_URL=${GOOGLE_WORKSPACE_EXTERNAL_URL:-}
-      # - GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_WORKSPACE_EXTERNAL_URL:-}/oauth2callback
-    secrets:
-      - gdrive_client_id
-      - gdrive_client_secret
+      # OAuth handled via Admin UI with user-configured credentials
     volumes:
       - google_workspace_creds:/app/store_creds
     networks:
@@ -187,8 +179,6 @@ services:
       - ACCESS_MODE=${ACCESS_MODE:-public}
     secrets:
       - model_name
-      - gdrive_client_id
-      - gdrive_client_secret
     volumes:
       - ./workspace:/workspace
       - ./workspace/_shared:/data  # Skills, shared data, and admin config

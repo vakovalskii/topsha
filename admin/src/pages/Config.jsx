@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getConfig, updateConfig, getServices, stopService, startService, getAccess, setAccessMode, setAdminId, getAllowlist, updateAllowlist, getSearchConfig, updateSearchConfig, getZAIKeyStatus, updateZAIKey, testZAIConnection, getASRConfig, updateASRConfig, getASRHealth, testASRConnection, getTimezone, updateTimezone, getLocale, updateLocale, getGoogleStatus, getGoogleAuthUrl, authorizeGoogle, disconnectGoogle } from '../api'
+import { getConfig, updateConfig, getServices, stopService, startService, getAccess, setAccessMode, setAdminId, getAllowlist, updateAllowlist, getSearchConfig, updateSearchConfig, getZAIKeyStatus, updateZAIKey, testZAIConnection, getASRConfig, updateASRConfig, getASRHealth, testASRConnection, getTimezone, updateTimezone, getLocale, updateLocale, getGoogleStatus, getGoogleAuthUrl, authorizeGoogle, disconnectGoogle, updateGoogleCredentials } from '../api'
 import { useT } from '../i18n'
 
 function Config() {
@@ -31,6 +31,9 @@ function Config() {
   const [googleAuthUrl, setGoogleAuthUrl] = useState(null)
   const [googleCode, setGoogleCode] = useState('')
   const [googleAuthorizing, setGoogleAuthorizing] = useState(false)
+  const [googleClientId, setGoogleClientId] = useState('')
+  const [googleClientSecret, setGoogleClientSecret] = useState('')
+  const [googleSaving, setGoogleSaving] = useState(false)
   const [tzData, setTzData] = useState(null)
   const [tzSaving, setTzSaving] = useState(false)
   const [selectedTz, setSelectedTz] = useState('')
@@ -169,8 +172,32 @@ function Config() {
     try {
       const data = await getGoogleStatus()
       setGoogleStatus(data)
+      // Load client credentials if available
+      if (data.client_id_saved) {
+        setGoogleClientId(data.client_id_saved)
+      }
     } catch (e) {
       console.error('Failed to load Google status:', e)
+    }
+  }
+
+  async function handleGoogleSaveCredentials() {
+    if (!googleClientId.trim() || !googleClientSecret.trim()) {
+      setToast({ type: 'error', message: 'Введите Client ID и Client Secret' })
+      setTimeout(() => setToast(null), 3000)
+      return
+    }
+    setGoogleSaving(true)
+    try {
+      await updateGoogleCredentials(googleClientId.trim(), googleClientSecret.trim())
+      setToast({ type: 'success', message: '✅ Credentials сохранены' })
+      setGoogleClientSecret('')  // Clear secret after save
+      loadGoogleStatus()
+    } catch (e) {
+      setToast({ type: 'error', message: e.message })
+    } finally {
+      setGoogleSaving(false)
+      setTimeout(() => setToast(null), 3000)
     }
   }
 
@@ -1427,17 +1454,68 @@ function Config() {
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ marginBottom: '8px' }}>🔗 Google Workspace</h3>
               <p style={{ color: '#888', fontSize: '14px' }}>
-                Подключите Google аккаунт для доступа к Gmail, Calendar и Drive
+                Подключите свой Google аккаунт для доступа к Gmail, Calendar и Drive
               </p>
             </div>
 
-            {/* Status */}
+            {/* Step 1: OAuth Client Credentials */}
+            <div style={{ 
+              marginBottom: '24px', 
+              padding: '20px', 
+              borderRadius: '8px', 
+              background: '#1a1a2e',
+              border: '1px solid #333'
+            }}>
+              <h4 style={{ marginBottom: '16px' }}>1️⃣ OAuth Client Credentials</h4>
+              <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '16px' }}>
+                Создайте OAuth Client в <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style={{ color: '#6af' }}>Google Cloud Console</a> и введите Client ID и Secret:
+              </p>
+              
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label">Client ID</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="660651688426-xxxxx.apps.googleusercontent.com"
+                  value={googleClientId}
+                  onChange={e => setGoogleClientId(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Client Secret</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="GOCSPX-xxxxx"
+                  value={googleClientSecret}
+                  onChange={e => setGoogleClientSecret(e.target.value)}
+                />
+              </div>
+
+              <button 
+                className="btn btn-primary"
+                onClick={handleGoogleSaveCredentials}
+                disabled={googleSaving || !googleClientId.trim() || !googleClientSecret.trim()}
+              >
+                {googleSaving ? '💾 Сохранение...' : '💾 Сохранить Credentials'}
+              </button>
+
+              {googleStatus?.client_configured && (
+                <div style={{ marginTop: '12px', color: '#6f6', fontSize: '13px' }}>
+                  ✅ Client ID настроен: {googleStatus.client_id_saved || googleStatus.client_id}
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Authorization Status */}
             <div style={{ 
               marginBottom: '24px', 
               padding: '16px', 
               borderRadius: '8px', 
               background: googleStatus?.authorized ? '#1a3a1a' : googleStatus?.client_configured ? '#2a2a1a' : '#3a1a1a' 
             }}>
+              <h4 style={{ marginBottom: '12px' }}>2️⃣ Статус авторизации</h4>
               {googleStatus?.authorized ? (
                 <>
                   <div style={{ fontWeight: 'bold', color: '#6f6', marginBottom: '8px' }}>
@@ -1463,7 +1541,7 @@ function Config() {
                     ⚠️ Не авторизовано
                   </div>
                   <div style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>
-                    OAuth Client настроен ({googleStatus.client_id}), но авторизация не выполнена
+                    OAuth Client настроен, но авторизация не выполнена. Перейдите к шагу 3.
                   </div>
                 </>
               ) : (
@@ -1472,21 +1550,22 @@ function Config() {
                     ❌ Не настроено
                   </div>
                   <div style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>
-                    Добавьте Google OAuth Client ID и Secret в secrets/gdrive_client_id.txt и secrets/gdrive_client_secret.txt
+                    Сначала сохраните OAuth Client Credentials в шаге 1
                   </div>
                 </>
               )}
             </div>
 
-            {/* Authorization flow */}
+            {/* Step 3: Authorization flow */}
             {googleStatus?.client_configured && !googleStatus?.authorized && (
               <div style={{ 
                 padding: '20px', 
                 background: '#1a1a2e', 
                 borderRadius: '8px',
-                border: '1px solid #333'
+                border: '1px solid #333',
+                marginBottom: '24px'
               }}>
-                <h4 style={{ marginBottom: '16px' }}>Авторизация Google</h4>
+                <h4 style={{ marginBottom: '16px' }}>3️⃣ Авторизация Google</h4>
                 
                 <div style={{ marginBottom: '16px' }}>
                   <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '12px' }}>

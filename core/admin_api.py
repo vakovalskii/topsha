@@ -1672,17 +1672,30 @@ async def restore_system_prompt():
 
 GOOGLE_TOKENS_FILE = "/data/google_tokens.json"
 GOOGLE_MCP_CREDS_DIR = "/data/google_creds"  # Shared with google-workspace-mcp
+GOOGLE_CLIENT_CREDS_FILE = "/data/google_client_credentials.json"  # User-configured credentials
 
 def _read_google_client_credentials():
-    """Read Google OAuth client credentials from Docker secrets
+    """Read Google OAuth client credentials (user-configured или fallback to Docker secrets)
     
     Returns:
         tuple: (client_id, client_secret) для OAuth авторизации
     """
+    # 1. Try user-configured credentials first
+    if os.path.exists(GOOGLE_CLIENT_CREDS_FILE):
+        try:
+            with open(GOOGLE_CLIENT_CREDS_FILE) as f:
+                creds = json.load(f)
+                client_id = creds.get("client_id")
+                client_secret = creds.get("client_secret")
+                if client_id and client_secret:
+                    return client_id, client_secret
+        except:
+            pass
+    
+    # 2. Fallback to Docker secrets (legacy)
     client_id = None
     client_secret = None
     
-    # Try to read client_id
     for path in ["/run/secrets/gdrive_client_id", "/run/secrets/gdrive_client_id.txt"]:
         if os.path.exists(path):
             try:
@@ -1692,7 +1705,6 @@ def _read_google_client_credentials():
             except:
                 pass
     
-    # Try to read client_secret
     for path in ["/run/secrets/gdrive_client_secret", "/run/secrets/gdrive_client_secret.txt"]:
         if os.path.exists(path):
             try:
@@ -1703,6 +1715,22 @@ def _read_google_client_credentials():
                 pass
     
     return client_id, client_secret
+
+
+def _save_google_client_credentials(client_id: str, client_secret: str):
+    """Save user-configured Google OAuth client credentials
+    
+    Args:
+        client_id: Google OAuth Client ID
+        client_secret: Google OAuth Client Secret
+    """
+    os.makedirs(os.path.dirname(GOOGLE_CLIENT_CREDS_FILE), exist_ok=True)
+    with open(GOOGLE_CLIENT_CREDS_FILE, "w") as f:
+        json.dump({
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "saved_at": datetime.now().isoformat()
+        }, f, indent=2)
 
 
 def _load_google_tokens():
@@ -1770,14 +1798,37 @@ async def get_google_status():
     client_id, client_secret = _read_google_client_credentials()
     tokens = _load_google_tokens()
     
+    # Check if credentials are user-configured
+    user_configured = os.path.exists(GOOGLE_CLIENT_CREDS_FILE)
+    
     return {
         "client_configured": bool(client_id and client_secret),
         "client_id": client_id[:20] + "..." if client_id else None,
+        "client_id_saved": client_id if user_configured else None,  # Full ID if user-configured
+        "user_configured": user_configured,
         "authorized": bool(tokens and tokens.get("access_token")),
         "email": tokens.get("email") if tokens else None,
         "expires_at": tokens.get("expires_at") if tokens else None,
         "scopes": tokens.get("scopes", []) if tokens else []
     }
+
+
+class GoogleCredentials(BaseModel):
+    client_id: str
+    client_secret: str
+
+
+@router.put("/google/credentials")
+async def update_google_credentials(data: GoogleCredentials):
+    """Save user-configured Google OAuth credentials"""
+    if not data.client_id or not data.client_secret:
+        raise HTTPException(400, "client_id and client_secret are required")
+    
+    try:
+        _save_google_client_credentials(data.client_id, data.client_secret)
+        return {"success": True, "message": "Credentials saved"}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to save credentials: {str(e)}")
 
 
 @router.get("/google/auth-url")

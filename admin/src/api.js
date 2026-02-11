@@ -179,6 +179,10 @@ export const authorizeGoogle = (code) => fetchApi('/google/authorize', {
 })
 export const refreshGoogleToken = () => fetchApi('/google/refresh', { method: 'POST' })
 export const disconnectGoogle = () => fetchApi('/google/disconnect', { method: 'DELETE' })
+export const updateGoogleCredentials = (client_id, client_secret) => fetchApi('/google/credentials', {
+  method: 'PUT',
+  body: JSON.stringify({ client_id, client_secret })
+})
 
 // Export all as object for convenient imports
 export const api = {
