@@ -18,7 +18,8 @@ from config import (
 from state import (
     bot, dp, bot_username, bot_id,
     is_afk, set_afk, clear_afk,
-    bot_conversation_count, bot_conversation_reset
+    bot_conversation_count, bot_conversation_reset,
+    register_username
 )
 from formatters import md_to_html, split_message, clean_model_artifacts
 from rate_limiter import rate_limiter
@@ -227,6 +228,10 @@ async def handle_voice(message: Message):
     if not user_id:
         return
     
+    # Register username -> user_id mapping
+    if message.from_user and message.from_user.username:
+        register_username(message.from_user.username, user_id)
+    
     # Check ASR configured
     if not ASR_URL:
         return
@@ -377,6 +382,10 @@ async def handle_message(message: Message):
     user_id = message.from_user.id if message.from_user else None
     if not user_id:
         return
+    
+    # Register username -> user_id mapping for send_dm resolution
+    if message.from_user and message.from_user.username:
+        register_username(message.from_user.username, user_id)
     
     chat_type = message.chat.type
     is_group = chat_type in (ChatType.GROUP, ChatType.SUPERGROUP)

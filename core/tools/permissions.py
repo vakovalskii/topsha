@@ -22,13 +22,13 @@ logger = logging.getLogger("core.permissions")
 # These can be overridden via /workspace/_shared/tool_permissions.json
 
 DEFAULT_PERMISSIONS = {
-    # Main session (DM with admin/trusted user) - full access minus send_dm
+    # Main session (DM with admin/trusted user) - full access
     "main": {
         "mode": "denylist",
         "tools": [
-            "send_dm",  # Not needed in DM - bot response IS the message
+            # send_dm is allowed - needed to send messages to OTHER users
         ],
-        "description": "Full access for direct messages (except send_dm)"
+        "description": "Full access for direct messages"
     },
     
     # Group sessions - restricted

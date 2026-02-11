@@ -5,7 +5,7 @@ import logging
 from aiohttp import web
 from aiogram.types import FSInputFile, BufferedInputFile
 
-from state import bot
+from state import bot, resolve_username, get_all_usernames
 from formatters import md_to_html
 
 logger = logging.getLogger("bot.server")
@@ -207,6 +207,34 @@ def check_pending_answer(user_id: int, chat_id: int, text: str) -> bool:
     return False
 
 
+async def handle_resolve_username(request):
+    """Resolve @username to user_id from known users registry"""
+    try:
+        data = await request.json()
+        username = data.get("username", "")
+        
+        if not username:
+            return web.json_response({"success": False, "error": "Missing username"}, status=400)
+        
+        user_id = resolve_username(username)
+        if user_id:
+            return web.json_response({"success": True, "user_id": user_id, "username": username.lower().lstrip("@")})
+        else:
+            return web.json_response({"success": False, "error": f"Unknown user @{username.lstrip('@')}. User must have messaged the bot at least once."})
+    except Exception as e:
+        logger.error(f"[server] Resolve username error: {e}")
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
+async def handle_known_users(request):
+    """List all known username -> user_id mappings"""
+    try:
+        users = get_all_usernames()
+        return web.json_response({"success": True, "users": users, "count": len(users)})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
 def create_http_app() -> web.Application:
     """Create HTTP application"""
     app = web.Application()
@@ -218,4 +246,6 @@ def create_http_app() -> web.Application:
     app.router.add_post("/delete", handle_delete_message)
     app.router.add_post("/ask", handle_ask_user)
     app.router.add_get("/answer/{question_id}", handle_get_answer)
+    app.router.add_post("/resolve_username", handle_resolve_username)
+    app.router.add_get("/known_users", handle_known_users)
     return app
