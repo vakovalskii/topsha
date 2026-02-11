@@ -19,6 +19,33 @@ _tools_cache = None
 _tools_cache_time = 0
 TOOLS_CACHE_TTL = 60  # seconds
 
+# Cache for userbot availability
+_userbot_available_cache = None
+_userbot_check_time = 0
+USERBOT_CHECK_TTL = 30  # seconds
+
+
+async def _check_userbot_available() -> bool:
+    """Check if userbot is available (with caching)"""
+    global _userbot_available_cache, _userbot_check_time
+    
+    now = datetime.now().timestamp()
+    if _userbot_available_cache is not None and (now - _userbot_check_time) < USERBOT_CHECK_TTL:
+        return _userbot_available_cache
+    
+    userbot_url = os.getenv("USERBOT_URL", "http://userbot:8080")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{userbot_url}/health", timeout=aiohttp.ClientTimeout(total=1)) as resp:
+                available = resp.status == 200
+                _userbot_available_cache = available
+                _userbot_check_time = now
+                return available
+    except:
+        _userbot_available_cache = False
+        _userbot_check_time = now
+        return False
+
 
 def try_fix_json_args(raw_args: str, tool_name: str) -> Optional[dict]:
     """Try to fix malformed JSON from models like DeepSeek
@@ -578,7 +605,10 @@ async def run_agent(
     # Get tool definitions FIRST (needed for system prompt)
     use_lazy_loading = os.getenv("LAZY_TOOL_LOADING", "true").lower() == "true"
     tool_definitions = await get_tool_definitions(source, lazy_loading=use_lazy_loading)
-    tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source)
+    
+    # Check if userbot is available
+    userbot_available = await _check_userbot_available()
+    tool_definitions = filter_tools_for_session(tool_definitions, chat_type, source, userbot_available)
     
     # Format tools list for prompt
     tools_list = "\n".join([

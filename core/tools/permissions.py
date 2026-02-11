@@ -315,7 +315,29 @@ def check_tool_permission(
 def filter_tools_for_session(
     definitions: list,
     session_type: str,
-    source: str = "bot"
+    source: str = "bot",
+    userbot_available: bool = False
 ) -> list:
-    """Convenience function to filter tools"""
-    return tool_permissions.filter_tool_definitions(definitions, session_type, source)
+    """Convenience function to filter tools
+    
+    Args:
+        definitions: Tool definitions to filter
+        session_type: Type of session (main, group, sandbox, userbot)
+        source: Source of request (bot, userbot)
+        userbot_available: Whether userbot is running (filters telegram_* tools)
+    """
+    filtered = tool_permissions.filter_tool_definitions(definitions, session_type, source)
+    
+    # Filter userbot tools if userbot is not available
+    if not userbot_available:
+        userbot_tools = {
+            "telegram_channel", "telegram_join", "telegram_send",
+            "telegram_history", "telegram_dialogs", "telegram_delete",
+            "telegram_edit", "telegram_resolve"
+        }
+        filtered = [
+            tool for tool in filtered
+            if tool.get("function", {}).get("name") not in userbot_tools
+        ]
+    
+    return filtered

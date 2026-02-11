@@ -297,6 +297,28 @@ from tools.telegram import (
     tool_telegram_edit, tool_telegram_resolve
 )
 
+# Userbot tools that require userbot to be running
+USERBOT_TOOLS = {
+    "telegram_channel", "telegram_join", "telegram_send",
+    "telegram_history", "telegram_dialogs", "telegram_delete",
+    "telegram_edit", "telegram_resolve"
+}
+
+def is_userbot_available() -> bool:
+    """Check if userbot is available"""
+    import aiohttp
+    import asyncio
+    userbot_url = os.getenv("USERBOT_URL", "http://userbot:8080")
+    try:
+        # Quick health check with short timeout
+        async def check():
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{userbot_url}/health", timeout=aiohttp.ClientTimeout(total=1)) as resp:
+                    return resp.status == 200
+        return asyncio.run(check())
+    except:
+        return False
+
 
 # Tool discovery - for lazy loading
 async def tool_search_tools(args: dict, ctx: ToolContext) -> ToolResult:

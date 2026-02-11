@@ -72,7 +72,23 @@ async def tool_telegram_send(args: dict, ctx: ToolContext) -> ToolResult:
     if result.get("success"):
         return ToolResult(True, output=result.get("message", "Message sent"))
     else:
-        return ToolResult(False, error=result.get("message", result.get("error", "Failed to send")))
+        error_msg = result.get("message", result.get("error", "Failed to send"))
+        
+        # Fallback: if userbot is unavailable and target looks like user_id, try send_dm
+        if "connection" in error_msg.lower() or "userbot" in error_msg.lower():
+            # Try to extract user_id from target
+            user_id = None
+            if target.isdigit():
+                user_id = int(target)
+            
+            if user_id:
+                # Import send_dm tool
+                from tools.send_dm import tool_send_dm
+                return await tool_send_dm({"user_id": user_id, "text": message}, ctx)
+            else:
+                return ToolResult(False, error=f"Userbot unavailable. For @username, need userbot. For user_id, use send_dm tool instead. Error: {error_msg}")
+        
+        return ToolResult(False, error=error_msg)
 
 
 async def tool_telegram_history(args: dict, ctx: ToolContext) -> ToolResult:
