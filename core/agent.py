@@ -254,8 +254,44 @@ def estimate_context_size(messages: list) -> int:
     return sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
 
 
-async def call_llm(messages: list, tools: list) -> dict:
-    """Call LLM via proxy"""
+def _get_language_reminder() -> str:
+    """Get language enforcement reminder from locale config"""
+    try:
+        locale_path = "/data/bot_locale.json"
+        if os.path.exists(locale_path):
+            with open(locale_path) as f:
+                data = json.load(f)
+                lang = data.get("language", "ru")
+        else:
+            lang = "ru"
+    except:
+        lang = "ru"
+    
+    reminders = {
+        "ru": "\n\n[ВАЖНО: Ответь пользователю НА РУССКОМ ЯЗЫКЕ. Дай краткий ответ по-русски.]",
+        "en": "",  # English is default for most models
+    }
+    return reminders.get(lang, reminders["ru"])
+
+
+def get_search_model() -> str:
+    """Get search response model from env or search config"""
+    model = os.getenv("SEARCH_MODEL_NAME", "")
+    if model:
+        return model
+    try:
+        config_path = "/data/search_config.json"
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                cfg = json.load(f)
+                return cfg.get("response_model", "")
+    except:
+        pass
+    return ""
+
+
+async def call_llm(messages: list, tools: list, model_override: str = "") -> dict:
+    """Call LLM via proxy. model_override allows using a different model (e.g. for search responses)."""
     if not CONFIG.proxy_url:
         return {"error": "No proxy configured"}
     
@@ -281,8 +317,11 @@ async def call_llm(messages: list, tools: list) -> dict:
     use_tools = not is_mlx_model() and tools
     
     # Get model and temperature from admin config (dynamic)
-    current_model = get_model()
+    current_model = model_override or get_model()
     current_temp = get_temperature()
+    
+    if model_override:
+        agent_logger.info(f"Using search model: {model_override}")
     
     request_body = {
         "model": current_model,
@@ -449,7 +488,7 @@ def get_bot_only_tools() -> list:
             "type": "function",
             "function": {
                 "name": "send_dm",
-                "description": "Send a private message to current user.",
+                "description": "Send a SEPARATE private DM to a user. ONLY use from GROUP chats when you need to message someone privately. NEVER use in private/DM chats - your response IS the message!",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -581,6 +620,7 @@ async def run_agent(
     
     final_response = ""
     iteration = 0
+    has_search_tool = False  # Track if search_web was called
     
     # Track dynamically loaded tools for this session
     dynamic_tools = []
@@ -593,8 +633,11 @@ async def run_agent(
         ctx_chars = sum(len(json.dumps(m)) for m in messages)
         log_agent_step(iteration, max_iter, len(messages), ctx_chars)
         
-        # Call LLM
-        result = await call_llm(messages, tool_definitions)
+        # Use search model for final response after search_web was called
+        search_model = get_search_model() if has_search_tool and iteration > 1 else ""
+        
+        # Call LLM (with search model override if applicable)
+        result = await call_llm(messages, tool_definitions, model_override=search_model)
         
         if "error" in result:
             agent_logger.error(f"LLM error: {result['error']}")
@@ -640,6 +683,10 @@ async def run_agent(
                 fn = tc.get("function", {})
                 name = fn.get("name", "")
                 raw_args = fn.get("arguments", "{}")
+                
+                # Track if search_web was called
+                if name == "search_web":
+                    has_search_tool = True
                 
                 agent_logger.info(f"[iter {iteration}] TOOL CALL: {name}")
                 agent_logger.debug(f"[iter {iteration}] TOOL ARGS RAW: {raw_args}")
@@ -689,6 +736,12 @@ async def run_agent(
                     head = output[:int(CONFIG.max_tool_output * 0.6)]
                     tail = output[-int(CONFIG.max_tool_output * 0.3):]
                     output = f"{head}\n\n... [TRIMMED] ...\n\n{tail}"
+                
+                # Add language reminder after tool results to enforce response language
+                if tool_result.success:
+                    lang_reminder = _get_language_reminder()
+                    if lang_reminder:
+                        output += lang_reminder
                 
                 messages.append({
                     "role": "tool",

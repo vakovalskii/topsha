@@ -65,6 +65,12 @@ class Config:
 
 CONFIG = Config()
 
+# ASR (Speech-to-Text) settings
+ASR_URL = os.getenv("ASR_URL", "")  # empty = disabled
+ASR_MAX_DURATION = int(os.getenv("ASR_MAX_DURATION", "120"))  # seconds
+ASR_TIMEOUT = int(os.getenv("ASR_TIMEOUT", "60"))  # seconds
+ASR_LANGUAGE = os.getenv("ASR_LANGUAGE", "ru")
+
 # Reactions lists
 POSITIVE_REACTIONS = ['👍', '❤️', '🔥', '🎉', '💯', '🏆', '👏', '😍', '🤗']
 NEGATIVE_REACTIONS = ['👎', '💩', '🤡', '🗿', '😴', '🤮']
