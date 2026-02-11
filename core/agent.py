@@ -505,6 +505,14 @@ def clean_response(text: str) -> str:
     return text.strip()
 
 
+def _get_admin_id() -> int:
+    """Get admin user ID from config or env"""
+    from admin_api import load_config as load_admin_config
+    admin_config = load_admin_config()
+    access = admin_config.get("access", {})
+    return access.get("admin_id", int(os.getenv("ADMIN_USER_ID", "0")))
+
+
 async def run_agent(
     user_id: int,
     chat_id: int,
@@ -517,7 +525,10 @@ async def run_agent(
     session = sessions.get(user_id, chat_id)
     session.source = source
     
-    agent_logger.info(f"Agent run: user={user_id}, chat={chat_id}, source={source}")
+    # Check if user is admin (bypasses some security patterns)
+    is_admin = (user_id == _get_admin_id())
+    
+    agent_logger.info(f"Agent run: user={user_id}, chat={chat_id}, source={source}, admin={is_admin}")
     agent_logger.info(f"Message: {message[:100]}...")
     
     # Get tool definitions FIRST (needed for system prompt)
@@ -564,7 +575,8 @@ async def run_agent(
         user_id=user_id,
         chat_id=chat_id,
         chat_type=chat_type,
-        source=source
+        source=source,
+        is_admin=is_admin
     )
     
     final_response = ""

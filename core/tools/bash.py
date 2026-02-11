@@ -31,8 +31,8 @@ async def tool_run_command(args: dict, ctx: ToolContext) -> ToolResult:
     if not command:
         return ToolResult(False, error="No command provided")
     
-    # Security check
-    dangerous, blocked, reason = check_command(command, ctx.chat_type)
+    # Security check (admin users bypass some patterns)
+    dangerous, blocked, reason = check_command(command, ctx.chat_type, ctx.is_admin)
     if blocked:
         return ToolResult(False, error=f"🚫 BLOCKED: {reason}")
     

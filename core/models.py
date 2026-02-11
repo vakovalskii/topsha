@@ -20,3 +20,4 @@ class ToolContext:
     chat_id: int = 0
     chat_type: str = "private"
     source: str = "bot"  # 'bot' or 'userbot'
+    is_admin: bool = False  # Admin users bypass some security patterns

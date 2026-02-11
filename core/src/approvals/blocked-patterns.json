@@ -115,19 +115,19 @@
     {
       "id": "python-run-1",
       "category": "code_env_access",
-      "pattern": "python.*open\\s*\\(\\s*['\"]\\\/run",
+      "pattern": "python.*open\\s*\\(\\s*['\"]\\/run",
       "reason": "BLOCKED: Python reading /run"
     },
     {
       "id": "python-run-2",
       "category": "code_env_access",
-      "pattern": "python.*open\\s*\\(\\s*['\"]\\\/etc",
+      "pattern": "python.*open\\s*\\(\\s*['\"]\\/etc",
       "reason": "BLOCKED: Python reading /etc"
     },
     {
       "id": "python-path-run",
       "category": "code_env_access",
-      "pattern": "python.*Path\\s*\\(\\s*['\"]\\\/run",
+      "pattern": "python.*Path\\s*\\(\\s*['\"]\\/run",
       "reason": "BLOCKED: Python Path /run"
     },
     {
@@ -579,13 +579,15 @@
       "id": "shell-var-expansion",
       "category": "env_leak",
       "pattern": "\\$\\{.*\\}",
-      "reason": "BLOCKED: Shell variable expansion"
+      "reason": "BLOCKED: Shell variable expansion",
+      "admin_bypass": true
     },
     {
       "id": "env-var-ref",
       "category": "env_leak",
       "pattern": "\\$[A-Z_]+",
-      "reason": "BLOCKED: Environment variable reference"
+      "reason": "BLOCKED: Environment variable reference",
+      "admin_bypass": true
     },
     {
       "id": "base64-pipe-1",
@@ -621,13 +623,15 @@
       "id": "curl-post-1",
       "category": "exfiltration",
       "pattern": "\\bcurl\\s+.*(-d|--data|--data-raw|--data-binary)\\s",
-      "reason": "BLOCKED: curl with POST data (potential exfiltration)"
+      "reason": "BLOCKED: curl with POST data (potential exfiltration)",
+      "admin_bypass": true
     },
     {
       "id": "curl-form",
       "category": "exfiltration",
       "pattern": "\\bcurl\\s+.*-F\\s",
-      "reason": "BLOCKED: curl with form upload"
+      "reason": "BLOCKED: curl with form upload",
+      "admin_bypass": true
     },
     {
       "id": "curl-upload-1",
@@ -645,13 +649,15 @@
       "id": "curl-post-2",
       "category": "exfiltration",
       "pattern": "\\bcurl\\s+.*-X\\s*POST",
-      "reason": "BLOCKED: curl POST request"
+      "reason": "BLOCKED: curl POST request",
+      "admin_bypass": true
     },
     {
       "id": "curl-put",
       "category": "exfiltration",
       "pattern": "\\bcurl\\s+.*-X\\s*PUT",
-      "reason": "BLOCKED: curl PUT request"
+      "reason": "BLOCKED: curl PUT request",
+      "admin_bypass": true
     },
     {
       "id": "wget-post-1",
@@ -908,14 +914,16 @@
       "category": "stress_test",
       "pattern": "load.*test",
       "flags": "i",
-      "reason": "BLOCKED: load test"
+      "reason": "BLOCKED: load test",
+      "admin_bypass": true
     },
     {
       "id": "benchmark",
       "category": "stress_test",
       "pattern": "benchmark",
       "flags": "i",
-      "reason": "BLOCKED: benchmark"
+      "reason": "BLOCKED: benchmark",
+      "admin_bypass": true
     },
     {
       "id": "urandom-bzip",
@@ -1013,7 +1021,6 @@
       "flags": "i",
       "reason": "BLOCKED: Package too large"
     },
-
     {
       "id": "bypass-ifs-1",
       "category": "filter_bypass",
@@ -1074,13 +1081,15 @@
       "id": "bypass-backtick-cmd",
       "category": "command_substitution",
       "pattern": "`[^`]+`",
-      "reason": "BLOCKED: Backtick command substitution"
+      "reason": "BLOCKED: Backtick command substitution",
+      "admin_bypass": true
     },
     {
       "id": "bypass-dollar-paren",
       "category": "command_substitution",
       "pattern": "\\$\\([^)]+\\)",
-      "reason": "BLOCKED: $() command substitution"
+      "reason": "BLOCKED: $() command substitution",
+      "admin_bypass": true
     },
     {
       "id": "bypass-wildcard-path",
@@ -1092,7 +1101,8 @@
       "id": "bypass-tr-transform",
       "category": "filter_bypass",
       "pattern": "\\btr\\s+['\"][^'\"]+['\"]\\s+['\"][^'\"]+['\"]",
-      "reason": "BLOCKED: tr character transformation (filter bypass)"
+      "reason": "BLOCKED: tr character transformation (filter bypass)",
+      "admin_bypass": true
     },
     {
       "id": "bypass-xxd-reverse",
@@ -1216,7 +1226,8 @@
       "id": "awk-system",
       "category": "code_execution",
       "pattern": "\\bawk\\b.*system\\s*\\(",
-      "reason": "BLOCKED: awk with system() call"
+      "reason": "BLOCKED: awk with system() call",
+      "admin_bypass": true
     },
     {
       "id": "sed-exec",
@@ -1228,13 +1239,15 @@
       "id": "find-exec",
       "category": "code_execution",
       "pattern": "\\bfind\\b.*-exec",
-      "reason": "BLOCKED: find with exec"
+      "reason": "BLOCKED: find with exec",
+      "admin_bypass": true
     },
     {
       "id": "xargs-exec",
       "category": "code_execution",
       "pattern": "\\bxargs\\b.*sh\\b",
-      "reason": "BLOCKED: xargs with shell"
+      "reason": "BLOCKED: xargs with shell",
+      "admin_bypass": true
     },
     {
       "id": "tar-checkpoint",
@@ -1446,7 +1459,6 @@
       "pattern": "\\/sys\\/fs\\/cgroup.*notify_on_release",
       "reason": "BLOCKED: cgroup notify escape"
     },
-
     {
       "id": "reverse-string-trick",
       "category": "obfuscation",
@@ -1487,7 +1499,8 @@
       "id": "reversed-builtin",
       "category": "obfuscation",
       "pattern": "\\breversed\\s*\\(",
-      "reason": "BLOCKED: reversed() for obfuscation"
+      "reason": "BLOCKED: reversed() for obfuscation",
+      "admin_bypass": true
     },
     {
       "id": "join-reverse-pattern",
@@ -1499,13 +1512,15 @@
       "id": "chr-ord-decode",
       "category": "obfuscation",
       "pattern": "chr\\s*\\(\\s*\\d+\\s*\\)",
-      "reason": "BLOCKED: chr() character building"
+      "reason": "BLOCKED: chr() character building",
+      "admin_bypass": true
     },
     {
       "id": "bytes-decode",
       "category": "obfuscation",
       "pattern": "bytes\\s*\\(\\s*\\[.*\\]\\s*\\)\\.decode",
-      "reason": "BLOCKED: bytes array decoding"
+      "reason": "BLOCKED: bytes array decoding",
+      "admin_bypass": true
     },
     {
       "id": "base64-decode-exec-1",
@@ -1544,21 +1559,24 @@
       "id": "base64-long-string",
       "category": "obfuscation",
       "pattern": "\\b[A-Za-z0-9+/]{40,}={0,2}\\b",
-      "reason": "BLOCKED: Long base64 string (potential obfuscated payload)"
+      "reason": "BLOCKED: Long base64 string (potential obfuscated payload)",
+      "admin_bypass": true
     },
     {
       "id": "python-base64-decode-eval",
       "category": "obfuscation",
       "pattern": "python.*base64.*decode",
       "flags": "i",
-      "reason": "BLOCKED: Python base64 decode in command"
+      "reason": "BLOCKED: Python base64 decode in command",
+      "admin_bypass": true
     },
     {
       "id": "echo-base64-pipe-decode",
       "category": "obfuscation",
       "pattern": "echo.*\\|.*base64\\s+(-d|--decode)",
       "flags": "i",
-      "reason": "BLOCKED: echo base64 | decode pattern"
+      "reason": "BLOCKED: echo base64 | decode pattern",
+      "admin_bypass": true
     },
     {
       "id": "workspace-root-ls",

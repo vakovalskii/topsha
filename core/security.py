@@ -31,15 +31,25 @@ DANGEROUS_PATTERNS = [
 ]
 
 
-def check_command(command: str, chat_type: str = "private") -> tuple[bool, bool, str]:
+def check_command(command: str, chat_type: str = "private", is_admin: bool = False) -> tuple[bool, bool, str]:
     """
     Check if command is blocked or dangerous.
+    
+    Args:
+        command: Command to check
+        chat_type: 'private' or 'group'
+        is_admin: If True, patterns with admin_bypass=true are skipped
+        
     Returns: (dangerous, blocked, reason)
     """
     for pattern_info in BLOCKED_PATTERNS:
         pattern = pattern_info.get("pattern", "")
         reason = pattern_info.get("reason", "Security violation")
         flags = re.IGNORECASE if pattern_info.get("flags") == "i" else 0
+        
+        # Skip patterns with admin_bypass=true for admin users
+        if is_admin and pattern_info.get("admin_bypass", False):
+            continue
         
         try:
             if re.search(pattern, command, flags):
