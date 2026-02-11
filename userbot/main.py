@@ -10,6 +10,7 @@ import asyncio
 import aiohttp
 import random
 import json
+import time
 from datetime import datetime, timedelta
 from telethon import TelegramClient, events
 from telethon.tl.types import User, Chat, Channel
@@ -41,14 +42,66 @@ API_HASH = read_secret('telegram_api_hash', 'TELEGRAM_API_HASH')
 PHONE = read_secret('telegram_phone', 'TELEGRAM_PHONE')
 CORE_URL = os.getenv('CORE_URL', 'http://core:4000')
 
-# Response settings (can override via env)
-RESPONSE_CHANCE_DM = float(os.getenv('RESPONSE_CHANCE_DM', '0.6'))       # 60% in DMs
-RESPONSE_CHANCE_GROUP = float(os.getenv('RESPONSE_CHANCE_GROUP', '0.1')) # 10% base in groups
-RESPONSE_CHANCE_MENTION = float(os.getenv('RESPONSE_CHANCE_MENTION', '0.5'))  # 50% when mentioned
-RESPONSE_CHANCE_REPLY = float(os.getenv('RESPONSE_CHANCE_REPLY', '0.4'))  # 40% on reply to me
-COOLDOWN_SECONDS = int(os.getenv('COOLDOWN_SECONDS', '60'))  # 60s between responses
-IGNORE_BOTS = True            # Don't respond to other bots
-MIN_MESSAGE_LENGTH = 2        # Ignore very short messages
+# Response settings - defaults, will be overwritten by admin panel config
+RESPONSE_CHANCE_DM = float(os.getenv('RESPONSE_CHANCE_DM', '0.6'))
+RESPONSE_CHANCE_GROUP = float(os.getenv('RESPONSE_CHANCE_GROUP', '0.1'))
+RESPONSE_CHANCE_MENTION = float(os.getenv('RESPONSE_CHANCE_MENTION', '0.5'))
+RESPONSE_CHANCE_REPLY = float(os.getenv('RESPONSE_CHANCE_REPLY', '0.4'))
+COOLDOWN_SECONDS = int(os.getenv('COOLDOWN_SECONDS', '60'))
+IGNORE_BOTS = True
+MIN_MESSAGE_LENGTH = 2
+USE_CLASSIFIER = False  # LLM-based decision instead of random chance
+CLASSIFIER_MIN_CONFIDENCE = 0.6  # Minimum confidence to respond
+
+# Proxy URL for classifier (has LLM credentials)
+PROXY_URL = os.getenv('PROXY_URL', 'http://proxy:3200')
+
+# Config cache
+_config_cache = {
+    "last_fetch": 0,
+    "data": None
+}
+CONFIG_CACHE_TTL = 30  # seconds
+
+
+async def fetch_config():
+    """Fetch userbot config from admin panel, with caching"""
+    global RESPONSE_CHANCE_DM, RESPONSE_CHANCE_GROUP, RESPONSE_CHANCE_MENTION
+    global RESPONSE_CHANCE_REPLY, COOLDOWN_SECONDS, IGNORE_BOTS
+    global USE_CLASSIFIER, CLASSIFIER_MIN_CONFIDENCE
+    
+    now = time.time() if 'time' in dir() else __import__('time').time()
+    
+    # Return cached if fresh
+    if _config_cache["data"] and (now - _config_cache["last_fetch"]) < CONFIG_CACHE_TTL:
+        return _config_cache["data"]
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{CORE_URL}/api/admin/userbot/config",
+                timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    _config_cache["data"] = data
+                    _config_cache["last_fetch"] = now
+                    
+                    # Update globals
+                    RESPONSE_CHANCE_DM = data.get("response_chance_dm", 0.6)
+                    RESPONSE_CHANCE_GROUP = data.get("response_chance_group", 0.1)
+                    RESPONSE_CHANCE_MENTION = data.get("response_chance_mention", 0.5)
+                    RESPONSE_CHANCE_REPLY = data.get("response_chance_reply", 0.4)
+                    COOLDOWN_SECONDS = data.get("cooldown_seconds", 60)
+                    IGNORE_BOTS = data.get("ignore_bots", True)
+                    USE_CLASSIFIER = data.get("use_classifier", False)
+                    CLASSIFIER_MIN_CONFIDENCE = data.get("classifier_min_confidence", 0.6)
+                    
+                    return data
+    except Exception as e:
+        print(f"[config] Failed to fetch config: {e}")
+    
+    return _config_cache["data"]
 
 # Chats to monitor (empty = all chats)
 ALLOWED_CHATS = []  # Add chat IDs to limit, e.g. [-1001234567890]
@@ -69,6 +122,10 @@ last_response_time = {}  # chat_id -> timestamp
 my_user_id = None
 my_username = None
 
+# Message history for classifier context (per chat)
+message_history: dict[int, list[dict]] = {}  # chat_id -> list of {author, text, timestamp}
+MAX_HISTORY_PER_CHAT = 15
+
 # Anti-loop: track bot-to-bot conversations
 bot_conversation_count: dict[tuple[int, int], int] = {}  # (chat_id, bot_id) -> count
 bot_conversation_reset: dict[tuple[int, int], float] = {}  # (chat_id, bot_id) -> timestamp
@@ -78,12 +135,88 @@ BOT_COOLDOWN = 120  # Seconds
 
 # ============ HELPERS ============
 
-def should_respond(event, message_text: str) -> tuple[bool, str]:
+def add_to_history(chat_id: int, author: str, text: str):
+    """Add message to chat history for classifier context"""
+    if chat_id not in message_history:
+        message_history[chat_id] = []
+    
+    message_history[chat_id].append({
+        "author": author,
+        "text": text[:500],  # Truncate long messages
+        "timestamp": time.time()
+    })
+    
+    # Keep only last N messages
+    if len(message_history[chat_id]) > MAX_HISTORY_PER_CHAT:
+        message_history[chat_id] = message_history[chat_id][-MAX_HISTORY_PER_CHAT:]
+
+
+async def call_classifier(
+    chat_id: int,
+    current_message: str,
+    sender_name: str,
+    chat_type: str,
+    is_reply_to_bot: bool,
+    is_mention: bool
+) -> tuple[bool, float, str]:
+    """
+    Call LLM classifier to decide if we should respond.
+    Returns (should_respond, confidence, reason)
+    """
+    global my_username
+    
+    try:
+        # Get recent messages for context
+        messages = message_history.get(chat_id, [])
+        
+        payload = {
+            "messages": messages[-10:],  # Last 10 messages
+            "current_message": current_message,
+            "sender_name": sender_name,
+            "chat_type": chat_type,
+            "bot_username": my_username or "",
+            "is_reply_to_bot": is_reply_to_bot,
+            "is_mention": is_mention
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{PROXY_URL}/classify",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=8)  # Fast timeout
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    should = data.get("should_respond", False)
+                    confidence = data.get("confidence", 0.5)
+                    reason = data.get("reason", "classifier")
+                    
+                    # Check if fallback was used
+                    if data.get("fallback"):
+                        reason = f"[fallback] {reason}"
+                    
+                    return should, confidence, reason
+                else:
+                    print(f"[classifier] HTTP {resp.status}")
+                    return is_mention or is_reply_to_bot, 0.5, "classifier HTTP error"
+                    
+    except asyncio.TimeoutError:
+        print("[classifier] Timeout, using fallback")
+        return is_mention or is_reply_to_bot, 0.5, "classifier timeout"
+    except Exception as e:
+        print(f"[classifier] Error: {e}")
+        return is_mention or is_reply_to_bot, 0.5, f"classifier error: {e}"
+
+
+async def should_respond(event, message_text: str) -> tuple[bool, str]:
     """
     Decide if we should respond to this message.
     Returns (should_respond, reason)
     """
     global my_user_id, my_username
+    
+    # Fetch latest config from admin panel
+    await fetch_config()
     
     chat_id = event.chat_id
     sender_id = event.sender_id
@@ -149,7 +282,27 @@ def should_respond(event, message_text: str) -> tuple[bool, str]:
             reason += f" +keyword({kw})"
             break
     
-    # Roll the dice
+    # Use classifier if enabled
+    if USE_CLASSIFIER:
+        should, confidence, classifier_reason = await call_classifier(
+            chat_id=chat_id,
+            current_message=message_text,
+            sender_name=str(sender_id),  # Will be replaced with actual name in handler
+            chat_type="private" if is_dm else "group",
+            is_reply_to_bot=is_reply_to_me,
+            is_mention=is_mentioned
+        )
+        
+        # Apply confidence threshold
+        if should and confidence >= CLASSIFIER_MIN_CONFIDENCE:
+            return True, f"[classifier] {classifier_reason} (conf={confidence:.0%})"
+        elif should:
+            # Below threshold, fall back to random
+            reason = f"[classifier low conf] {classifier_reason} (conf={confidence:.0%})"
+        else:
+            return False, f"[classifier] {classifier_reason} (conf={confidence:.0%})"
+    
+    # Roll the dice (traditional random method)
     roll = random.random()
     if roll < chance:
         return True, f"{reason} (chance={chance:.0%}, roll={roll:.2f})"
@@ -585,11 +738,19 @@ async def main():
     # Set global client for API endpoints
     telegram_client = client
     
+    # Fetch initial config
+    await fetch_config()
+    
     print(f"[userbot] Started as @{my_username} ({my_user_id})")
     print(f"[userbot] Chances: DM={RESPONSE_CHANCE_DM:.0%}, Group={RESPONSE_CHANCE_GROUP:.0%}, Mention={RESPONSE_CHANCE_MENTION:.0%}, Reply={RESPONSE_CHANCE_REPLY:.0%}")
-    print(f"[userbot] Core: {CORE_URL}")
+    print(f"[userbot] Cooldown: {COOLDOWN_SECONDS}s, Ignore bots: {IGNORE_BOTS}")
+    if USE_CLASSIFIER:
+        print(f"[userbot] 🧠 LLM Classifier ENABLED (min confidence: {CLASSIFIER_MIN_CONFIDENCE:.0%})")
+    else:
+        print(f"[userbot] 🎲 Using random chance (classifier disabled)")
+    print(f"[userbot] Core: {CORE_URL}, Proxy: {PROXY_URL}")
     print(f"[userbot] API server on http://0.0.0.0:8080")
-    print(f"[userbot] Access control via core API (admin panel)")
+    print(f"[userbot] ✨ Settings managed via admin panel (auto-refresh every {CONFIG_CACHE_TTL}s)")
     
     @client.on(events.NewMessage(incoming=True))
     async def handler(event):
@@ -615,6 +776,11 @@ async def main():
         chat = await event.get_chat()
         chat_name = getattr(chat, 'title', None) or getattr(chat, 'username', None) or str(event.chat_id)
         print(f"[msg] {chat_name}: {text[:50]}...{fwd_info}")
+        
+        # Add to history for classifier context
+        sender = await event.get_sender()
+        sender_name = getattr(sender, 'username', None) or getattr(sender, 'first_name', 'anon') if sender else 'unknown'
+        add_to_history(event.chat_id, sender_name, text)
         
         if not text:
             return
@@ -670,8 +836,10 @@ async def main():
                 await event.reply(help_text)
                 return
             
-        # Ignore bots
-        if IGNORE_BOTS and isinstance(sender, User) and sender.bot:
+        # Ignore bots (use current config value)
+        config = _config_cache.get("data") or {}
+        ignore_bots = config.get("ignore_bots", IGNORE_BOTS)
+        if ignore_bots and isinstance(sender, User) and sender.bot:
             print(f"[skip] Bot {sender.id}: {text[:30]}... (ignoring bots)")
             return
         
@@ -682,7 +850,7 @@ async def main():
         chat_type = "private" if event.is_private else "group"
         
         # Decide if we should respond
-        should, reason = should_respond(event, text)
+        should, reason = await should_respond(event, text)
         
         if not should:
             # Log skipped messages occasionally

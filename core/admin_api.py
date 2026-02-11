@@ -45,6 +45,7 @@ except:
 class ConfigUpdate(BaseModel):
     agent: Optional[dict] = None
     bot: Optional[dict] = None
+    userbot: Optional[dict] = None
     security: Optional[dict] = None
     limits: Optional[dict] = None
     access: Optional[dict] = None
@@ -320,6 +321,17 @@ def load_config():
             "ignore_chance": 0.05,
             "max_length": 4000
         },
+        "userbot": {
+            "enabled": True,
+            "response_chance_dm": 0.6,
+            "response_chance_group": 0.1,
+            "response_chance_mention": 0.5,
+            "response_chance_reply": 0.4,
+            "cooldown_seconds": 60,
+            "ignore_bots": True,
+            "use_classifier": False,
+            "classifier_min_confidence": 0.6
+        },
         "security": {
             "approval_required": True,
             "block_patterns": True,
@@ -385,6 +397,8 @@ async def update_config(data: ConfigUpdate):
         config["agent"] = {**config.get("agent", {}), **data.agent}
     if data.bot:
         config["bot"] = {**config.get("bot", {}), **data.bot}
+    if data.userbot:
+        config["userbot"] = {**config.get("userbot", {}), **data.userbot}
     if data.security:
         config["security"] = {**config.get("security", {}), **data.security}
     if data.limits:
@@ -431,6 +445,25 @@ async def toggle_userbot(data: AccessToggle):
     config["access"]["userbot_enabled"] = data.enabled
     save_config(config)
     return {"success": True, "userbot_enabled": data.enabled}
+
+
+@router.get("/userbot/config")
+async def get_userbot_config():
+    """Get userbot configuration - called by userbot service"""
+    config = load_config()
+    userbot = config.get("userbot", {})
+    access = config.get("access", {})
+    return {
+        "enabled": access.get("userbot_enabled", True),
+        "response_chance_dm": userbot.get("response_chance_dm", 0.6),
+        "response_chance_group": userbot.get("response_chance_group", 0.1),
+        "response_chance_mention": userbot.get("response_chance_mention", 0.5),
+        "response_chance_reply": userbot.get("response_chance_reply", 0.4),
+        "cooldown_seconds": userbot.get("cooldown_seconds", 60),
+        "ignore_bots": userbot.get("ignore_bots", True),
+        "use_classifier": userbot.get("use_classifier", False),
+        "classifier_min_confidence": userbot.get("classifier_min_confidence", 0.6)
+    }
 
 
 @router.put("/access/mode")

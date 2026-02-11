@@ -12,6 +12,7 @@ services:
       - base_url
       - api_key
       - zai_api_key
+      - model_name
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3200/health')"]
       interval: 10s

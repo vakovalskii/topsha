@@ -53,6 +53,7 @@ def read_secret(name: str) -> str | None:
 LLM_BASE_URL = read_secret("base_url")
 LLM_API_KEY = read_secret("api_key")
 ZAI_API_KEY = read_secret("zai_api_key")
+MODEL_NAME = read_secret("model_name") or "gpt-4"  # Model for classifier
 
 
 async def health(request: web.Request) -> web.Response:
@@ -215,11 +216,191 @@ async def zai_read(request: web.Request) -> web.Response:
         return web.json_response({"error": "ZAI request failed", "message": str(e)}, status=502)
 
 
+async def classify_response(request: web.Request) -> web.Response:
+    """
+    LLM-based classifier: should the userbot respond to this message?
+    Uses structured output to get a simple yes/no decision with reasoning.
+    """
+    if not LLM_BASE_URL:
+        return web.json_response({"error": "LLM not configured"}, status=500)
+    
+    try:
+        data = await request.json()
+    except:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    
+    messages = data.get("messages", [])  # Last N messages for context
+    current_message = data.get("current_message", "")
+    sender_name = data.get("sender_name", "user")
+    chat_type = data.get("chat_type", "group")  # "private" or "group"
+    bot_username = data.get("bot_username", "")
+    is_reply_to_bot = data.get("is_reply_to_bot", False)
+    is_mention = data.get("is_mention", False)
+    
+    # Build context string from recent messages
+    context_lines = []
+    for msg in messages[-10:]:  # Last 10 messages
+        author = msg.get("author", "unknown")
+        text = msg.get("text", "")[:200]  # Truncate long messages
+        context_lines.append(f"{author}: {text}")
+    
+    context = "\n".join(context_lines) if context_lines else "(no previous context)"
+    
+    # Classifier prompt
+    classifier_prompt = f"""You are a response classifier for a Telegram userbot. 
+Analyze the conversation and decide if the bot should respond to the latest message.
+
+CONTEXT (recent messages):
+{context}
+
+CURRENT MESSAGE from {sender_name}:
+"{current_message}"
+
+METADATA:
+- Chat type: {chat_type}
+- Bot username: @{bot_username}
+- Is reply to bot: {is_reply_to_bot}
+- Is @mention of bot: {is_mention}
+
+RESPOND with JSON only:
+{{"should_respond": true/false, "confidence": 0.0-1.0, "reason": "brief explanation"}}
+
+GUIDELINES for should_respond=true:
+- Direct questions or requests for help
+- Technical discussions where bot can add value
+- When explicitly mentioned or replied to
+- Interesting conversations where bot has relevant knowledge
+
+GUIDELINES for should_respond=false:
+- Casual chat between humans (greetings, jokes, small talk)
+- Messages not directed at anyone specific
+- Spam, ads, or off-topic content
+- When someone else is clearly being addressed
+- Very short messages like "ok", "lol", "да", "+1"
+- Bot already responded recently to similar topic
+
+Respond ONLY with valid JSON, no other text."""
+
+    # Make fast LLM call with low tokens
+    llm_payload = {
+        "model": data.get("model", MODEL_NAME),
+        "messages": [
+            {"role": "system", "content": "You are a response classifier. Output only valid JSON."},
+            {"role": "user", "content": classifier_prompt}
+        ],
+        "max_tokens": 200,
+        "temperature": 0.1,  # Low temperature for consistent decisions
+    }
+    
+    # Note: response_format=json_object not always supported, relying on prompt instead
+    
+    target_url = LLM_BASE_URL.rstrip("/v1").rstrip("/") + "/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LLM_API_KEY}"
+    }
+    
+    log.info(f"Classifier: {chat_type} from {sender_name}: {current_message[:50]}...")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                target_url,
+                json=llm_payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10)  # Fast timeout
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    log.error(f"Classifier LLM error: {resp.status} - {error_text[:200]}")
+                    # Fallback: respond if mentioned or replied to
+                    return web.json_response({
+                        "should_respond": is_mention or is_reply_to_bot,
+                        "confidence": 0.5,
+                        "reason": "LLM error, using fallback",
+                        "fallback": True
+                    })
+                
+                result = await resp.json()
+                
+                # Debug log
+                log.info(f"LLM response: {str(result)[:500]}")
+                
+                # Extract content from various response formats
+                content = None
+                if "choices" in result and result["choices"]:
+                    choice = result["choices"][0]
+                    if "message" in choice and choice["message"]:
+                        content = choice["message"].get("content")
+                    elif "text" in choice:
+                        content = choice["text"]
+                
+                if not content:
+                    # Fallback for unusual response formats
+                    log.warning(f"No content in LLM response, using fallback")
+                    return web.json_response({
+                        "should_respond": is_mention or is_reply_to_bot,
+                        "confidence": 0.5,
+                        "reason": "No content in LLM response",
+                        "fallback": True
+                    })
+                
+                # Parse JSON response
+                try:
+                    # Clean content - remove markdown code blocks if present
+                    clean_content = content.strip()
+                    if clean_content.startswith("```"):
+                        # Remove ```json and ``` markers
+                        lines = clean_content.split("\n")
+                        clean_content = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+                    
+                    decision = json.loads(clean_content)
+                    should_respond = decision.get("should_respond", False)
+                    confidence = decision.get("confidence", 0.5)
+                    reason = decision.get("reason", "no reason")
+                    
+                    log.info(f"Classifier decision: {should_respond} ({confidence:.0%}) - {reason}")
+                    
+                    return web.json_response({
+                        "should_respond": should_respond,
+                        "confidence": confidence,
+                        "reason": reason
+                    })
+                except json.JSONDecodeError as e:
+                    # Try to extract yes/no from text
+                    log.warning(f"JSON parse error: {e}, content: {content[:200]}")
+                    content_lower = content.lower()
+                    should_respond = "true" in content_lower or "\"should_respond\": true" in content_lower
+                    return web.json_response({
+                        "should_respond": should_respond,
+                        "confidence": 0.5,
+                        "reason": f"Parsed from text: {content[:80]}...",
+                        "parse_fallback": True
+                    })
+                    
+    except asyncio.TimeoutError:
+        log.warning("Classifier timeout, using fallback")
+        return web.json_response({
+            "should_respond": is_mention or is_reply_to_bot,
+            "confidence": 0.5,
+            "reason": "Timeout, using fallback",
+            "fallback": True
+        })
+    except Exception as e:
+        log.error(f"Classifier error: {e}")
+        return web.json_response({
+            "should_respond": is_mention or is_reply_to_bot,
+            "confidence": 0.5,
+            "reason": f"Error: {e}",
+            "fallback": True
+        })
+
+
 async def not_found(request: web.Request) -> web.Response:
     """Handle unknown routes"""
     return web.json_response({
         "error": "Not found",
-        "routes": ["/v1/*", "/zai/search?q=...", "/zai/read?url=...", "/health"]
+        "routes": ["/v1/*", "/zai/search?q=...", "/zai/read?url=...", "/classify", "/health"]
     }, status=404)
 
 
@@ -232,6 +413,7 @@ def create_app() -> web.Application:
     app.router.add_route("*", "/v1/{path:.*}", proxy_llm)
     app.router.add_get("/zai/search", zai_search)
     app.router.add_get("/zai/read", zai_read)
+    app.router.add_post("/classify", classify_response)
     
     # Catch-all for 404
     app.router.add_route("*", "/{path:.*}", not_found)

@@ -294,7 +294,7 @@ function Config() {
     return <div className="loading"><div className="spinner"></div>{t('common.loading')}</div>
   }
 
-  const tabs = ['access', 'search', 'asr', 'agent', 'bot', 'security', 'limits']
+  const tabs = ['access', 'search', 'asr', 'agent', 'bot', 'userbot', 'security', 'limits']
 
   return (
     <div>
@@ -738,6 +738,162 @@ function Config() {
                 value={config.bot?.max_length || 4000}
                 onChange={e => updateValue('bot', 'max_length', parseInt(e.target.value))}
               />
+            </div>
+          </>
+        )}
+
+        {activeTab === 'userbot' && (
+          <>
+            <div style={{ marginBottom: '16px' }}>
+              <h3 style={{ marginBottom: '8px' }}>👤 Userbot Response Settings</h3>
+              <p style={{ color: '#888', fontSize: '13px' }}>
+                Control when the userbot responds to messages. Lower values = more selective.
+              </p>
+            </div>
+            
+            <div className="toggle">
+              <span className="toggle-label">Ignore Other Bots</span>
+              <label className="toggle-switch">
+                <input 
+                  type="checkbox"
+                  checked={config.userbot?.ignore_bots ?? true}
+                  onChange={e => updateValue('userbot', 'ignore_bots', e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label className="form-label">Response Chance in DMs</label>
+              <div className="range-container">
+                <input 
+                  type="range"
+                  className="range-input"
+                  min="0"
+                  max="100"
+                  value={(config.userbot?.response_chance_dm || 0.6) * 100}
+                  onChange={e => updateValue('userbot', 'response_chance_dm', parseInt(e.target.value) / 100)}
+                />
+                <span className="range-value">{Math.round((config.userbot?.response_chance_dm || 0.6) * 100)}%</span>
+              </div>
+              <p style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>Chance to respond in private messages</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Response Chance in Groups</label>
+              <div className="range-container">
+                <input 
+                  type="range"
+                  className="range-input"
+                  min="0"
+                  max="50"
+                  value={(config.userbot?.response_chance_group || 0.1) * 100}
+                  onChange={e => updateValue('userbot', 'response_chance_group', parseInt(e.target.value) / 100)}
+                />
+                <span className="range-value">{Math.round((config.userbot?.response_chance_group || 0.1) * 100)}%</span>
+              </div>
+              <p style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>Chance to respond to random group messages</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Response Chance on @Mention</label>
+              <div className="range-container">
+                <input 
+                  type="range"
+                  className="range-input"
+                  min="0"
+                  max="100"
+                  value={(config.userbot?.response_chance_mention || 0.5) * 100}
+                  onChange={e => updateValue('userbot', 'response_chance_mention', parseInt(e.target.value) / 100)}
+                />
+                <span className="range-value">{Math.round((config.userbot?.response_chance_mention || 0.5) * 100)}%</span>
+              </div>
+              <p style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>Chance to respond when @mentioned</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Response Chance on Reply</label>
+              <div className="range-container">
+                <input 
+                  type="range"
+                  className="range-input"
+                  min="0"
+                  max="100"
+                  value={(config.userbot?.response_chance_reply || 0.4) * 100}
+                  onChange={e => updateValue('userbot', 'response_chance_reply', parseInt(e.target.value) / 100)}
+                />
+                <span className="range-value">{Math.round((config.userbot?.response_chance_reply || 0.4) * 100)}%</span>
+              </div>
+              <p style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>Chance to respond when someone replies to userbot's message</p>
+            </div>
+
+            {/* LLM Classifier Section */}
+            <div style={{ 
+              marginTop: '24px', 
+              padding: '16px', 
+              background: config.userbot?.use_classifier ? '#1a2a1a' : '#1a1a2a',
+              borderRadius: '8px',
+              border: '1px solid #333'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div>
+                  <h4 style={{ margin: 0, color: '#fff' }}>🧠 LLM Classifier</h4>
+                  <p style={{ color: '#888', fontSize: '12px', marginTop: '4px' }}>
+                    Use AI to decide when to respond instead of random chance
+                  </p>
+                </div>
+                <label className="toggle-switch">
+                  <input 
+                    type="checkbox"
+                    checked={config.userbot?.use_classifier ?? false}
+                    onChange={e => updateValue('userbot', 'use_classifier', e.target.checked)}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+              
+              {config.userbot?.use_classifier && (
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Minimum Confidence</label>
+                  <div className="range-container">
+                    <input 
+                      type="range"
+                      className="range-input"
+                      min="30"
+                      max="95"
+                      value={(config.userbot?.classifier_min_confidence || 0.6) * 100}
+                      onChange={e => updateValue('userbot', 'classifier_min_confidence', parseInt(e.target.value) / 100)}
+                    />
+                    <span className="range-value">{Math.round((config.userbot?.classifier_min_confidence || 0.6) * 100)}%</span>
+                  </div>
+                  <p style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>
+                    Only respond when LLM is this confident the message is worth answering
+                  </p>
+                </div>
+              )}
+              
+              {!config.userbot?.use_classifier && (
+                <p style={{ color: '#666', fontSize: '12px', fontStyle: 'italic', marginBottom: 0 }}>
+                  When disabled, random chance (sliders above) is used
+                </p>
+              )}
+            </div>
+
+            <div className="form-group" style={{ marginTop: '16px' }}>
+              <label className="form-label">Cooldown Between Responses (seconds)</label>
+              <div className="range-container">
+                <input 
+                  type="range"
+                  className="range-input"
+                  min="0"
+                  max="300"
+                  step="10"
+                  value={config.userbot?.cooldown_seconds || 60}
+                  onChange={e => updateValue('userbot', 'cooldown_seconds', parseInt(e.target.value))}
+                />
+                <span className="range-value">{config.userbot?.cooldown_seconds || 60}s</span>
+              </div>
+              <p style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>Minimum time between responses in the same chat</p>
             </div>
           </>
         )}
