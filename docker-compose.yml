@@ -113,8 +113,9 @@ services:
       - OAUTHLIB_INSECURE_TRANSPORT=1
       - PORT=8500
       - TOOL_TIER=core
-      # External URL for OAuth callback (set this to your public URL if behind proxy)
-      - WORKSPACE_EXTERNAL_URL=${GOOGLE_WORKSPACE_EXTERNAL_URL:-http://localhost:8500}
+      # External URL for OAuth callback (set this to your public URL)
+      - WORKSPACE_EXTERNAL_URL=${GOOGLE_WORKSPACE_EXTERNAL_URL:-http://93.77.178.68:8500}
+      - GOOGLE_OAUTH_REDIRECT_URI=${GOOGLE_WORKSPACE_EXTERNAL_URL:-http://93.77.178.68:8500}/oauth2callback
     secrets:
       - gdrive_client_id
       - gdrive_client_secret
