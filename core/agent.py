@@ -105,6 +105,11 @@ class SessionManager:
         if key not in self.sessions:
             cwd = os.path.join(CONFIG.workspace, str(user_id))
             os.makedirs(cwd, exist_ok=True)
+            # Ensure directory is writable (for bind mounts)
+            try:
+                os.chmod(cwd, 0o777)
+            except:
+                pass
             
             self.sessions[key] = Session(
                 user_id=user_id,
