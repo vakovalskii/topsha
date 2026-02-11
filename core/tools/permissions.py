@@ -35,9 +35,7 @@ DEFAULT_PERMISSIONS = {
     "group": {
         "mode": "denylist",
         "tools": [
-            "send_dm",        # Don't spam DMs from groups
             "manage_message", # Don't edit messages in groups
-            "schedule_task",  # No scheduled tasks from groups
         ],
         "description": "Restricted access for group chats"
     },
