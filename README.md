@@ -1,4 +1,4 @@
-# 🐧 LocalTopSH
+# 🐧 Tosha Local AI Agent for simple every day tasks
 
 **AI Agent Framework for Self-Hosted LLMs — deploy on your infrastructure, keep data private.**
 
