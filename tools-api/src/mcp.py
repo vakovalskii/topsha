@@ -110,6 +110,9 @@ async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
                 }
                 if server.api_key:
                     headers["Authorization"] = f"Bearer {server.api_key}"
+                    print(f"[MCP {server.name}] requesting with Bearer auth")
+                else:
+                    print(f"[MCP {server.name}] requesting without auth (no token configured)")
 
                 # Try Streamable HTTP MCP first (requires session)
                 # Step 1: Initialize session
