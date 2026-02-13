@@ -96,7 +96,7 @@ def save_mcp_config(servers: Dict[str, MCPServer]):
     """Save MCP server configurations"""
     os.makedirs(os.path.dirname(MCP_CONFIG_FILE), exist_ok=True)
     with open(MCP_CONFIG_FILE, 'w') as f:
-        json.dump({name: server.dict() for name, server in servers.items()}, f, indent=2)
+        json.dump({name: server.model_dump() for name, server in servers.items()}, f, indent=2)
 
 
 async def fetch_mcp_tools(server: MCPServer) -> List[dict]:

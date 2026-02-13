@@ -16,18 +16,17 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 @router.get("/servers")
 async def list_mcp_servers():
-    """List all configured MCP servers"""
+    """List all configured MCP servers. api_key is never returned; api_key_set indicates if one is configured."""
     servers = load_mcp_config()
     mcp_cache.load_cache()
-    
+
     result = []
     for name, server in servers.items():
-        result.append({
-            **server.dict(),
-            "tool_count": len([t for t in mcp_cache.tools.values() if t.get("server") == name]),
-            "status": mcp_cache.server_status.get(name, {})
-        })
-    
+        d = server.model_dump(exclude={"api_key"})
+        d["api_key_set"] = bool(server.api_key)
+        d["tool_count"] = len([t for t in mcp_cache.tools.values() if t.get("server") == name])
+        d["status"] = mcp_cache.server_status.get(name, {})
+        result.append(d)
     return {"servers": result}
 
 
