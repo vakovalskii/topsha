@@ -27,6 +27,7 @@ npm-debug.log*
 # Runtime
 *.pid
 *.seed
+__pycache__
 
 # Workspace (mounted volume)
 workspace/

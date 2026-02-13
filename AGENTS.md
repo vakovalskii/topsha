@@ -123,6 +123,10 @@ python scripts/doctor.py --json
 # - Resource limits
 ```
 
+## MCP Servers (Admin)
+
+In Admin panel (MCP page) you can add MCP servers by HTTP(S) URL. Optional **Bearer token** can be set for authorization: use the "Bearer token (optional)" field when adding a server. The token is sent as `Authorization: Bearer <token>` in requests to the MCP server and is never returned in API responses.
+
 ## Tool Permissions by Session Type
 
 | Session | Available Tools | Denied Tools |

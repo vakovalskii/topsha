@@ -830,6 +830,7 @@ async def get_logs(service: str, lines: int = 100):
 class McpServerCreate(BaseModel):
     name: str
     url: str
+    api_key: Optional[str] = None
     description: Optional[str] = None
 
 
