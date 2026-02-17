@@ -24,9 +24,9 @@ RUN mkdir -p /app/store_creds \
     && chown -R app:app /app/store_creds \
     && chmod 755 /app/store_creds
 
-# Copy entrypoint script before switching user
+# Copy entrypoint script before switching user (strip CRLF for Linux)
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh && chown app:app /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh && chown app:app /app/entrypoint.sh
 
 USER app
 

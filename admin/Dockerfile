@@ -18,7 +18,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Create htpasswd file from environment variables at runtime
 # Default: admin:admin (change via ADMIN_USER and ADMIN_PASSWORD env vars)
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN sed 's/\r$//' /docker-entrypoint.sh > /tmp/ep && mv /tmp/ep /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 EXPOSE 3000
 ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -99,84 +99,77 @@ def save_mcp_config(servers: Dict[str, MCPServer]):
         json.dump({name: server.dict() for name, server in servers.items()}, f, indent=2)
 
 
+def _parse_tools_list_response(response: httpx.Response) -> List[dict]:
+    """Extract tools from tools/list response (JSON-RPC or SSE)."""
+    if response.status_code != 200:
+        return []
+    try:
+        data = response.json()
+        if "result" in data and "tools" in data["result"]:
+            return data["result"]["tools"]
+        if "tools" in data:
+            return data["tools"]
+    except Exception:
+        pass
+    for line in response.text.split("\n"):
+        if line.startswith("data: "):
+            try:
+                data = json.loads(line[6:])
+                if "result" in data and "tools" in data["result"]:
+                    return data["result"]["tools"]
+            except Exception:
+                pass
+    return []
+
+
 async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
-    """Fetch tools from an MCP server"""
-    if server.transport == "http":
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                headers = {
-                    "Accept": "application/json, text/event-stream",
-                    "Content-Type": "application/json"
+    """Fetch tools from an MCP server. Tries base URL and base/mcp (FastMCP default)."""
+    if server.transport != "http":
+        return []
+    urls_to_try = [server.url.rstrip("/") or server.url]
+    base = server.url.rstrip("/")
+    if base and not base.split("//", 1)[-1].count("/"):
+        urls_to_try.append(base + "/mcp")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {
+                "Accept": "application/json, text/event-stream",
+                "Content-Type": "application/json"
+            }
+            if server.api_key:
+                headers["Authorization"] = f"Bearer {server.api_key}"
+            init_payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "topsha-tools-api", "version": "1.0"}
                 }
-                if server.api_key:
-                    headers["Authorization"] = f"Bearer {server.api_key}"
-                
-                # Try Streamable HTTP MCP first (requires session)
-                # Step 1: Initialize session
-                init_response = await client.post(
-                    server.url,
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "initialize",
-                        "params": {
-                            "protocolVersion": "2024-11-05",
-                            "capabilities": {},
-                            "clientInfo": {"name": "topsha-tools-api", "version": "1.0"}
-                        }
-                    },
-                    headers=headers
-                )
-                
-                session_id = init_response.headers.get("mcp-session-id")
-                
-                if session_id:
-                    # Streamable HTTP MCP - use session ID
-                    headers["mcp-session-id"] = session_id
-                    response = await client.post(
-                        server.url,
-                        json={
-                            "jsonrpc": "2.0",
-                            "id": 2,
-                            "method": "tools/list",
-                            "params": {}
-                        },
-                        headers=headers
-                    )
-                    
-                    if response.status_code == 200:
-                        # Parse SSE response
-                        text = response.text
-                        for line in text.split('\n'):
-                            if line.startswith('data: '):
-                                try:
-                                    data = json.loads(line[6:])
-                                    if "result" in data and "tools" in data["result"]:
-                                        return data["result"]["tools"]
-                                except:
-                                    pass
-                else:
-                    # Simple JSON-RPC (legacy MCP servers)
-                    response = await client.post(
-                        server.url,
-                        json={
-                            "jsonrpc": "2.0",
-                            "id": 1,
-                            "method": "tools/list",
-                            "params": {}
-                        },
-                        headers=headers
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        if "result" in data and "tools" in data["result"]:
-                            return data["result"]["tools"]
-                        if "tools" in data:
-                            return data["tools"]
-        except Exception as e:
-            print(f"Error fetching tools from {server.name}: {e}")
-    
+            }
+            list_payload = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+            for base_url in urls_to_try:
+                try:
+                    init_response = await client.post(base_url, json=init_payload, headers=headers)
+                    session_id = init_response.headers.get("mcp-session-id")
+                    if session_id:
+                        h = {**headers, "mcp-session-id": session_id}
+                        list_response = await client.post(base_url, json=list_payload, headers=h)
+                        tools = _parse_tools_list_response(list_response)
+                        if tools:
+                            return tools
+                    else:
+                        list_response = await client.post(
+                            base_url, json={**list_payload, "id": 1}, headers=headers
+                        )
+                        tools = _parse_tools_list_response(list_response)
+                        if tools:
+                            return tools
+                except Exception:
+                    continue
+    except Exception as e:
+        print(f"Error fetching tools from {server.name}: {e}")
     return []
 
 

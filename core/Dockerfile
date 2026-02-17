@@ -29,9 +29,9 @@ COPY tests/ ./tests/
 COPY src/agent/system.txt ./src/agent/
 COPY src/approvals/blocked-patterns.json ./src/approvals/
 
-# Copy entrypoint script
+# Copy entrypoint script (strip CRLF so it runs on Linux regardless of host)
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Create workspace and Google credentials directory
 RUN mkdir -p /workspace && chmod 777 /workspace && \
