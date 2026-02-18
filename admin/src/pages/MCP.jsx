@@ -9,7 +9,7 @@ function MCP() {
   const [refreshing, setRefreshing] = useState(null)
   const [toast, setToast] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [newServer, setNewServer] = useState({ name: '', url: '', description: '' })
+  const [newServer, setNewServer] = useState({ name: '', url: '', description: '', api_key: '' })
 
   useEffect(() => {
     loadServers()
@@ -38,10 +38,10 @@ function MCP() {
       return
     }
     try {
-      await addMcpServer(newServer)
+      await addMcpServer({ ...newServer, api_key: newServer.api_key || undefined })
       showToast('success', t('toast.server_added', { name: newServer.name }))
       setShowAddModal(false)
-      setNewServer({ name: '', url: '', description: '' })
+      setNewServer({ name: '', url: '', description: '', api_key: '' })
       loadServers()
     } catch (e) {
       showToast('error', e.message)
@@ -243,7 +243,18 @@ function MCP() {
                 onChange={e => setNewServer({ ...newServer, url: e.target.value })}
               />
             </div>
-            
+
+            <div className="form-group">
+              <label>{t('mcp.api_key')}</label>
+              <input
+                type="password"
+                placeholder={t('mcp.api_key_placeholder')}
+                value={newServer.api_key}
+                onChange={e => setNewServer({ ...newServer, api_key: e.target.value })}
+                autoComplete="off"
+              />
+            </div>
+
             <div className="form-group">
               <label>{t('mcp.description')}</label>
               <input

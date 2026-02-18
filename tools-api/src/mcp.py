@@ -96,7 +96,7 @@ def save_mcp_config(servers: Dict[str, MCPServer]):
     """Save MCP server configurations"""
     os.makedirs(os.path.dirname(MCP_CONFIG_FILE), exist_ok=True)
     with open(MCP_CONFIG_FILE, 'w') as f:
-        json.dump({name: server.dict() for name, server in servers.items()}, f, indent=2)
+        json.dump({name: server.model_dump() for name, server in servers.items()}, f, indent=2)
 
 
 async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
@@ -110,7 +110,10 @@ async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
                 }
                 if server.api_key:
                     headers["Authorization"] = f"Bearer {server.api_key}"
-                
+                    print(f"[MCP {server.name}] requesting with Bearer auth")
+                else:
+                    print(f"[MCP {server.name}] requesting without auth (no token configured)")
+
                 # Try Streamable HTTP MCP first (requires session)
                 # Step 1: Initialize session
                 init_response = await client.post(
@@ -127,9 +130,18 @@ async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
                     },
                     headers=headers
                 )
-                
+                if init_response.status_code != 200:
+                    print(f"[MCP {server.name}] initialize status={init_response.status_code} body={init_response.text[:500]}")
                 session_id = init_response.headers.get("mcp-session-id")
-                
+                if not session_id and init_response.status_code == 200:
+                    try:
+                        init_body = init_response.json()
+                        session_id = init_body.get("result", {}).get("sessionId") or init_body.get("sessionId")
+                    except Exception:
+                        pass
+                if not session_id and init_response.status_code == 200:
+                    print(f"[MCP {server.name}] initialize OK but no mcp-session-id (header or body), using legacy path")
+
                 if session_id:
                     # Streamable HTTP MCP - use session ID
                     headers["mcp-session-id"] = session_id
@@ -143,18 +155,34 @@ async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
                         },
                         headers=headers
                     )
-                    
+
                     if response.status_code == 200:
-                        # Parse SSE response
-                        text = response.text
-                        for line in text.split('\n'):
-                            if line.startswith('data: '):
+                        text = response.text.strip()
+                        # Parse SSE: lines "data: { ... }"
+                        for line in text.split("\n"):
+                            s = line.strip()
+                            if s.startswith("data:"):
+                                payload = s[5:].strip()
+                                if not payload:
+                                    continue
                                 try:
-                                    data = json.loads(line[6:])
+                                    data = json.loads(payload)
                                     if "result" in data and "tools" in data["result"]:
                                         return data["result"]["tools"]
-                                except:
+                                except json.JSONDecodeError:
                                     pass
+                        # Fallback: single JSON object (some streamable servers)
+                        try:
+                            data = json.loads(text)
+                            if "result" in data and "tools" in data["result"]:
+                                return data["result"]["tools"]
+                            if "tools" in data:
+                                return data["tools"]
+                        except json.JSONDecodeError:
+                            pass
+                        print(f"[MCP {server.name}] tools/list SSE/JSON: no result.tools (len={len(text)}) preview: {text[:200]!r}")
+                    else:
+                        print(f"[MCP {server.name}] tools/list status={response.status_code} body={response.text[:500]}")
                 else:
                     # Simple JSON-RPC (legacy MCP servers)
                     response = await client.post(
@@ -167,15 +195,38 @@ async def fetch_mcp_tools(server: MCPServer) -> List[dict]:
                         },
                         headers=headers
                     )
-                    
+
                     if response.status_code == 200:
-                        data = response.json()
-                        if "result" in data and "tools" in data["result"]:
-                            return data["result"]["tools"]
-                        if "tools" in data:
-                            return data["tools"]
+                        raw = response.text
+                        if not raw or not raw.strip():
+                            print(f"[MCP {server.name}] tools/list empty response body")
+                        else:
+                            # Try plain JSON first (single JSON-RPC object)
+                            try:
+                                data = json.loads(raw)
+                                if "result" in data and "tools" in data["result"]:
+                                    return data["result"]["tools"]
+                                if "tools" in data:
+                                    return data["tools"]
+                                if "error" in data:
+                                    print(f"[MCP {server.name}] tools/list JSON-RPC error: {data['error']}")
+                                else:
+                                    print(f"[MCP {server.name}] tools/list unexpected JSON keys: {list(data.keys())[:10]}")
+                            except json.JSONDecodeError:
+                                # Maybe SSE format (one JSON per "data: " line)
+                                for line in raw.split("\n"):
+                                    if line.startswith("data: "):
+                                        try:
+                                            data = json.loads(line[6:])
+                                            if "result" in data and "tools" in data["result"]:
+                                                return data["result"]["tools"]
+                                        except json.JSONDecodeError:
+                                            pass
+                                print(f"[MCP {server.name}] tools/list invalid JSON and no SSE data. body preview: {raw[:300]!r}")
+                    else:
+                        print(f"[MCP {server.name}] tools/list status={response.status_code} body={response.text[:500]}")
         except Exception as e:
-            print(f"Error fetching tools from {server.name}: {e}")
+            print(f"[MCP {server.name}] Error fetching tools: {e}")
     
     return []
 
