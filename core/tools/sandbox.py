@@ -163,7 +163,7 @@ async def get_or_create_container(user_id: str) -> Optional[UserContainer]:
             cpu_period=100000,
             cpu_quota=50000,  # 50% CPU
             pids_limit=100,
-            network_mode="localtopsh_agent-net",  # Same network as other services
+            network_mode="topsha_agent-net",  # Same network as other services
             security_opt=["no-new-privileges"],
         )
         
