@@ -724,8 +724,8 @@ async def run_agent(
         messages.append(msg)
         
         # Check for tool calls
-        tool_calls = msg.get("tool_calls", [])
-        content = msg.get("content", "") or ""
+        tool_calls = msg.get("tool_calls") or []
+        content = msg.get("content") or ""
         
         # If no content and no tool_calls - model didn't finish, continue the loop
         reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""

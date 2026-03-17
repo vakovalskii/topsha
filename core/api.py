@@ -2,7 +2,7 @@
 
 import os
 import aiohttp
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile, Form
 from pydantic import BaseModel
 from typing import Optional
 
@@ -155,6 +155,23 @@ async def chat(req: ChatRequest):
     except Exception as e:
         api_logger.error(f"Chat error: {e}")
         return {"response": f"Error: {e}"}
+
+
+@app.post("/api/upload")
+async def upload_file(
+    user_id: int = Form(...),
+    filename: str = Form(...),
+    file: UploadFile = File(...)
+):
+    safe_name = os.path.basename(filename).replace("..", "")
+    workspace = os.path.join(CONFIG.workspace, str(user_id))
+    os.makedirs(workspace, exist_ok=True)
+    dest = os.path.join(workspace, safe_name)
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    api_logger.info(f"File uploaded: user={user_id}, file={safe_name}, size={len(content)}")
+    return {"status": "ok", "path": dest, "filename": safe_name}
 
 
 @app.post("/api/clear")
