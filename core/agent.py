@@ -468,8 +468,11 @@ async def call_llm(messages: list, tools: list, model_override: str = "") -> dic
                 
                 return result
     except Exception as e:
-        agent_logger.error(f"RAW RESPONSE EXCEPTION: {e}")
-        return {"error": str(e)}
+        import traceback
+        traceback.print_exc()
+        tb_str = f'```python\n{"".join(traceback.format_exception(type(e), e, e.__traceback__))}\n```'
+        agent_logger.error(f"RAW RESPONSE EXCEPTION: {str(tb_str)}")
+        return {"error": str(tb_str)}
 
 
 async def get_tool_definitions(source: str = "bot", lazy_loading: bool = True) -> list:
