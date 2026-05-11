@@ -389,6 +389,149 @@ async def handle_voice(message: Message):
             rate_limiter.mark_inactive(user_id)
 
 
+# ============ FILE HANDLER ============
+
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+@dp.message(F.document | F.photo)
+async def handle_file(message: Message):
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id:
+        return
+
+    if message.from_user.username:
+        register_username(message.from_user.username, user_id)
+
+    if is_afk():
+        await set_reaction(message.chat.id, message.message_id, "💤")
+        return
+
+    chat_type = message.chat.type
+    chat_id = message.chat.id
+    message_id = message.message_id
+    is_private = chat_type == ChatType.PRIVATE
+
+    chat_type_str = chat_type.value if hasattr(chat_type, "value") else str(chat_type)
+    access_result = check_user_access(user_id, chat_type_str)
+    if not access_result.allowed:
+        if is_private:
+            await rate_limiter.safe_send(chat_id, message.reply(access_result.reason))
+        return
+
+    # Get file object (photo = largest size, document = the doc)
+    if message.photo:
+        tg_file = message.photo[-1]  # largest resolution
+        filename = f"photo_{tg_file.file_unique_id}.jpg"
+        file_size = tg_file.file_size or 0
+    else:
+        tg_file = message.document
+        filename = tg_file.file_name or f"file_{tg_file.file_unique_id}"
+        file_size = tg_file.file_size or 0
+
+    if file_size > MAX_FILE_SIZE:
+        await rate_limiter.safe_send(
+            chat_id,
+            message.reply(f"Файл слишком большой ({file_size // 1024 // 1024} МБ). Максимум 20 МБ.")
+        )
+        return
+
+    if not rate_limiter.can_accept_user(user_id):
+        await set_reaction(chat_id, message_id, "🤔")
+        await rate_limiter.safe_send(chat_id, message.reply("Подожди, я ещё обрабатываю предыдущий запрос."))
+        return
+
+    username = message.from_user.username or message.from_user.first_name or str(user_id)
+    caption = message.caption or ""
+
+    print(f"\n[IN] @{username} ({user_id}): [file: {filename}, {file_size} bytes]\n")
+    await set_reaction(chat_id, message_id, "👀")
+
+    # Download file
+    try:
+        await bot.send_chat_action(chat_id, "upload_document")
+        file_info = await bot.get_file(tg_file.file_id)
+        buf = await bot.download_file(file_info.file_path)
+        file_bytes = buf.read()
+    except Exception as e:
+        print(f"[file] Download error: {e}")
+        await rate_limiter.safe_send(chat_id, message.reply(f"Не удалось скачать файл: {e}"))
+        return
+
+    # Upload to core
+    from api import upload_file_to_core
+    result = await upload_file_to_core(user_id, filename, file_bytes)
+    if not result:
+        await rate_limiter.safe_send(chat_id, message.reply("Не удалось сохранить файл в рабочую папку."))
+        return
+
+    saved_name = result.get("filename", filename)
+    size_str = f"{file_size // 1024} КБ" if file_size < 1024 * 1024 else f"{file_size // 1024 // 1024} МБ"
+
+    caption_part = f"\n{caption}" if caption else ""
+    message_for_agent = (
+        f"[От: @{username} ({user_id})]\n"
+        f"[Файл загружен в рабочую папку: {saved_name}, {size_str}]{caption_part}"
+    )
+
+    mark_chat_active(chat_id)
+    rate_limiter.mark_active(user_id)
+
+    async with rate_limiter.get_user_lock(user_id):
+        typing_task = None
+        try:
+            async def typing_loop():
+                while True:
+                    try:
+                        await bot.send_chat_action(chat_id, "typing")
+                    except:
+                        pass
+                    await asyncio.sleep(CONFIG.typing_interval)
+
+            typing_task = asyncio.create_task(typing_loop())
+            core_result = await call_core(user_id, chat_id, message_for_agent, username, chat_type_str)
+
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+
+            if core_result.disabled or core_result.access_denied:
+                return
+
+            await set_reaction(chat_id, message_id, get_random_done_emoji())
+
+            final_response = core_result.response or "Файл сохранён."
+            final_response = clean_model_artifacts(final_response)
+            print(f"[OUT] → @{username}:\n{final_response[:200]}\n")
+
+            html_response = md_to_html(final_response)
+            parts = split_message(html_response, CONFIG.max_length)
+
+            for i, part in enumerate(parts):
+                sent = await rate_limiter.safe_send(
+                    chat_id,
+                    message.reply(part) if i == 0 else bot.send_message(chat_id, part)
+                )
+                if not sent and i == 0:
+                    plain = re.sub(r"<[^>]+>", "", part)[:4000]
+                    await rate_limiter.safe_send(chat_id, message.reply(plain))
+                    break
+
+        except Exception as e:
+            if typing_task:
+                typing_task.cancel()
+            print(f"[file] Error: {e}")
+            traceback.print_exc()
+            await set_reaction(chat_id, message_id, "👎")
+            await rate_limiter.safe_send(chat_id, message.reply(f"Ошибка: {str(e)[:200]}"))
+
+        finally:
+            rate_limiter.mark_inactive(user_id)
+
+
 # ============ MESSAGE HANDLER ============
 
 @dp.message(F.text)

@@ -60,3 +60,23 @@ async def clear_session(user_id: int) -> bool:
         return True
     except:
         return False
+
+
+async def upload_file_to_core(user_id: int, filename: str, data: bytes) -> dict | None:
+    """Upload file to core for saving to user workspace"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            form = aiohttp.FormData()
+            form.add_field("user_id", str(user_id))
+            form.add_field("filename", filename)
+            form.add_field("file", data, filename=filename)
+            async with session.post(
+                f"{CORE_URL}/api/upload",
+                data=form,
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception as e:
+        print(f"[upload] Failed: {e}")
+    return None
